@@ -63,6 +63,7 @@ describe("CloudflareWorkersAIProvider REST adapter", () => {
   });
 
   it("maps Cloudflare rate limits to the controlled quota error", async () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
     const fetcher = vi.fn<typeof fetch>(() =>
       Promise.resolve(
         Response.json(
@@ -77,6 +78,45 @@ describe("CloudflareWorkersAIProvider REST adapter", () => {
       code: "AI_QUOTA_UNAVAILABLE",
       status: 503
     });
+    expect(consoleError).toHaveBeenCalledWith(
+      JSON.stringify({
+        event: "workers_ai_request_failed",
+        reason: "http_error",
+        httpStatus: 429,
+        cfRay: null,
+        errors: [{ code: 7505, message: "Rate limited" }]
+      })
+    );
+    consoleError.mockRestore();
+  });
+
+  it("logs safe Cloudflare diagnostics for account or token failures", async () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const fetcher = vi.fn<typeof fetch>(() =>
+      Promise.resolve(
+        Response.json(
+          { success: false, result: null, errors: [{ code: 10000, message: "Authentication error" }], messages: [] },
+          { status: 403, headers: { "cf-ray": "safe-ray-id" } }
+        )
+      )
+    );
+    const provider = new CloudflareWorkersAIProvider("account-b", "secret-token", "@cf/meta/model", fetcher);
+
+    await expect(provider.evaluateWriting({ text: "This is my writing.", wordCount: 4 })).rejects.toMatchObject({
+      code: "PROVIDER_UNAVAILABLE",
+      status: 503
+    });
+    const log = String(consoleError.mock.calls[0]?.[0]);
+    expect(JSON.parse(log)).toEqual({
+      event: "workers_ai_request_failed",
+      reason: "http_error",
+      httpStatus: 403,
+      cfRay: "safe-ray-id",
+      errors: [{ code: 10000, message: "Authentication error" }]
+    });
+    expect(log).not.toContain("secret-token");
+    expect(log).not.toContain("account-b");
+    consoleError.mockRestore();
   });
 
   it("rejects a malformed successful Cloudflare response", async () => {

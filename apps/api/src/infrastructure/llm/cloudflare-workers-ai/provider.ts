@@ -70,6 +70,22 @@ const CloudflareApiEnvelopeSchema = z.object({
 const CLOUDFLARE_API_ORIGIN = "https://api.cloudflare.com";
 const WORKERS_AI_RATE_LIMIT_ERROR = 7505;
 
+const logProviderFailure = (details: {
+  reason: "network_error" | "http_error" | "invalid_envelope" | "invalid_json";
+  httpStatus?: number;
+  cfRay?: string | null;
+  errors?: Array<{ code?: number | undefined; message?: string | undefined }>;
+  errorType?: string;
+}) => {
+  console.error(
+    JSON.stringify({
+      event: "workers_ai_request_failed",
+      ...details,
+      errors: details.errors?.slice(0, 5)
+    })
+  );
+};
+
 export class CloudflareWorkersAIProvider implements LLMProvider {
   readonly name = "cloudflare";
 
@@ -97,6 +113,10 @@ export class CloudflareWorkersAIProvider implements LLMProvider {
         })
       });
     } catch (error) {
+      logProviderFailure({
+        reason: "network_error",
+        errorType: error instanceof Error ? error.name : "unknown"
+      });
       throw new AppError("PROVIDER_UNAVAILABLE", "The writing evaluator is temporarily unavailable.", 503, error);
     }
 
@@ -104,14 +124,31 @@ export class CloudflareWorkersAIProvider implements LLMProvider {
     try {
       rawEnvelope = await response.json();
     } catch (error) {
+      logProviderFailure({
+        reason: "invalid_json",
+        httpStatus: response.status,
+        cfRay: response.headers.get("cf-ray"),
+        errorType: error instanceof Error ? error.name : "unknown"
+      });
       throw new AppError("INVALID_PROVIDER_OUTPUT", "The evaluator returned an invalid response.", 502, error);
     }
 
     const apiEnvelope = CloudflareApiEnvelopeSchema.safeParse(rawEnvelope);
     if (!apiEnvelope.success) {
+      logProviderFailure({
+        reason: "invalid_envelope",
+        httpStatus: response.status,
+        cfRay: response.headers.get("cf-ray")
+      });
       throw new AppError("INVALID_PROVIDER_OUTPUT", "The evaluator returned an invalid response.", 502, apiEnvelope.error);
     }
     if (!response.ok || !apiEnvelope.data.success) {
+      logProviderFailure({
+        reason: "http_error",
+        httpStatus: response.status,
+        cfRay: response.headers.get("cf-ray"),
+        errors: apiEnvelope.data.errors
+      });
       const isQuotaError =
         response.status === 429 || apiEnvelope.data.errors.some((error) => error.code === WORKERS_AI_RATE_LIMIT_ERROR);
       throw new AppError(

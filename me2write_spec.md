@@ -1633,4 +1633,9 @@ Deployment credentials and external resources (Google OAuth client, Neon databas
 - Documented Cloudflare Workers Builds and Pages Git integration as the production deployment path: validated commits pushed to the configured production branch automatically build and deploy both applications.
 - Retained Wrangler deployment only as a manual recovery path; production runtime variables and secrets remain dashboard-managed.
 
+### 2026-08-13 — Workers AI failure diagnostics
+
+- Added structured server-side diagnostics for cross-account Workers AI network, HTTP, envelope, and JSON failures.
+- Logs may include upstream HTTP status, Cloudflare Ray ID, and provider error codes/messages, but never the API token, account ID, prompt, or submitted writing.
+
 Future changes must add a new dated entry instead of rewriting this history.

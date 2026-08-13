@@ -121,6 +121,8 @@ The evaluation claim is atomic and `request_id` is unique. A browser retry can r
 
 The Worker runs in Cloudflare account A and calls the Workers AI REST endpoint for account B. No `AI` binding is configured because bindings are scoped to the Worker account. The adapter sends `AI_API_TOKEN` only in the server-side `Authorization: Bearer` header.
 
+If an evaluation returns `PROVIDER_UNAVAILABLE`, open the production Worker logs and filter for `workers_ai_request_failed`. The event includes only safe diagnostics (`reason`, upstream HTTP status, Cloudflare Ray ID, and Cloudflare error codes/messages); it never includes the API token, account ID, prompt, or submitted writing. An immediate `401`/`403` usually means `AI_ACCOUNT_ID` and `AI_API_TOKEN` do not belong to the same account, the token is invalid, or its account-B scope lacks both Workers AI Read and Edit. A `404` usually indicates an incorrect account/model path, while `429` indicates quota/rate limiting.
+
 Generate Worker runtime types whenever `wrangler.jsonc` changes:
 
 ```bash
