@@ -24,8 +24,8 @@
       "name": "me2write-api-production",
       "vars": {
         "ENVIRONMENT": "production",
-        "APP_ORIGIN": "https://me2write.example.com",
-        "API_ORIGIN": "https://api.me2write.example.com",
+        "APP_ORIGIN": "https://write-checker.pages.dev",
+        "API_ORIGIN": "https://me2write-api-production.kimmanhcuong96.workers.dev",
         "LLM_PROVIDER": "cloudflare",
         "LLM_MODEL": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
         "MAX_WRITING_WORDS": "1000",
