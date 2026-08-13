@@ -17,7 +17,7 @@ const ConfigSchema = z.object({
   AI_API_TOKEN: z.string().min(1),
   MAX_WRITING_WORDS: PositiveIntegerString.default(1000),
   MAX_EVALUATIONS_PER_DAY: PositiveIntegerString.default(30),
-  LLM_MAX_TOKENS: z.union([PositiveIntegerString, z.undefined()]),
+  LLM_MAX_TOKENS: PositiveIntegerString.optional(),
   ADMIN_EMAILS: z.string().default("")
 });
 
