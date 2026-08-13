@@ -12,7 +12,9 @@ const ConfigSchema = z.object({
   GOOGLE_CLIENT_SECRET: z.string().min(1),
   SESSION_SECRET: z.string().min(32),
   LLM_PROVIDER: z.literal("cloudflare"),
-  LLM_MODEL: z.string().min(1),
+  LLM_MODEL: z.string().regex(/^@[a-z0-9._-]+(?:\/[a-z0-9._-]+){2,}$/iu, "Invalid Workers AI model identifier"),
+  AI_ACCOUNT_ID: z.string().min(1),
+  AI_API_TOKEN: z.string().min(1),
   MAX_WRITING_WORDS: PositiveIntegerString.default(1000),
   MAX_EVALUATIONS_PER_DAY: PositiveIntegerString.default(30),
   LLM_MAX_TOKENS: z.union([PositiveIntegerString, z.undefined()]),
@@ -29,6 +31,8 @@ export type AppConfig = {
   sessionSecret: string;
   llmProvider: "cloudflare";
   llmModel: string;
+  aiAccountId: string;
+  aiApiToken: string;
   maximumWritingWords: number;
   maximumDailyEvaluations: number;
   maximumLlmTokens: number | null;
@@ -47,6 +51,8 @@ export const readConfig = (env: RuntimeEnv): AppConfig => {
     sessionSecret: value.SESSION_SECRET,
     llmProvider: value.LLM_PROVIDER,
     llmModel: value.LLM_MODEL,
+    aiAccountId: value.AI_ACCOUNT_ID,
+    aiApiToken: value.AI_API_TOKEN,
     maximumWritingWords: value.MAX_WRITING_WORDS,
     maximumDailyEvaluations: value.MAX_EVALUATIONS_PER_DAY,
     maximumLlmTokens: value.LLM_MAX_TOKENS ?? null,

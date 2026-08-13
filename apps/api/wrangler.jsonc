@@ -4,7 +4,6 @@
   "main": "src/index.ts",
   "compatibility_date": "2026-08-13",
   "compatibility_flags": ["nodejs_compat"],
-  "ai": { "binding": "AI", "remote": true },
   "vars": {
     "ENVIRONMENT": "development",
     "APP_ORIGIN": "http://localhost:5173",
@@ -23,7 +22,6 @@
   "env": {
     "production": {
       "name": "me2write-api-production",
-      "ai": { "binding": "AI" },
       "vars": {
         "ENVIRONMENT": "production",
         "APP_ORIGIN": "https://me2write.example.com",

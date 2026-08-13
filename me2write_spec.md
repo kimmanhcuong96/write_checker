@@ -256,7 +256,7 @@ For the MVP, prefer:
 
 - Neon/PostgreSQL instead of D1.
 - Portable repository interfaces instead of DB calls scattered through routes.
-- `LLMProvider` abstraction instead of direct `env.AI` usage in services.
+- `LLMProvider` abstraction instead of direct Cloudflare API usage in services.
 - Standard Web APIs/Hono routing.
 - Configuration abstraction instead of passing Worker bindings throughout the application.
 
@@ -570,9 +570,9 @@ Potential future providers:
 - Ollama
 - other compatible providers
 
-Do not reference `env.AI` directly from domain/application services.
+Do not reference the Workers AI REST client or Cloudflare credentials from domain/application services.
 
-The Cloudflare adapter may use the Worker AI binding internally.
+The Cloudflare adapter calls the Workers AI REST API so the Worker may remain in account A while inference and billing belong to account B. It authenticates server-side with account B's account ID and API token; domain/application services remain unaware of Cloudflare credentials.
 
 Desired dependency direction:
 
@@ -586,7 +586,10 @@ WritingEvaluationService
 CloudflareWorkersAIProvider
           │
           ▼
-       env.AI
+Workers AI REST API
+          │
+          ▼
+Cloudflare AI account B
 ```
 
 ---
@@ -600,6 +603,8 @@ Example conceptual variables:
 ```text
 LLM_PROVIDER=cloudflare
 LLM_MODEL=<configured-model>
+AI_ACCOUNT_ID=<account-B-id>
+AI_API_TOKEN=<account-B-token>
 LLM_MAX_TOKENS=<optional>
 MAX_WRITING_WORDS=1000
 ```
@@ -608,7 +613,7 @@ Do not hard-code a specific model throughout the codebase.
 
 There should be one configuration source for the active provider/model.
 
-Credentials and secrets must remain server-side.
+Credentials and secrets must remain server-side. `AI_ACCOUNT_ID` and `AI_API_TOKEN` are configured as Worker secrets in account A and must not be committed as Wrangler `vars`, even though an account ID alone is not an authentication credential. The API token requires Workers AI Read and Edit permissions for account B.
 
 Never expose:
 
@@ -1591,7 +1596,7 @@ The following MVP capabilities are implemented in the current repository:
 - Independent Google OAuth/OIDC authentication with state, PKCE, secure cookies, logout, and opaque server-side sessions.
 - React/Vite frontend for Cloudflare Pages and Hono API for Cloudflare Workers.
 - Platform-neutral CEFR rubric, writing validation, result schema, application services, repository ports, and `LLMProvider` abstraction.
-- Cloudflare Workers AI JSON-mode adapter with provider-independent normalized output and nullable usage metadata.
+- Cross-account Cloudflare Workers AI REST adapter with Bearer authentication, validated Cloudflare/JSON-mode envelopes, controlled quota errors, provider-independent normalized output, and nullable usage metadata.
 - Neon PostgreSQL persistence for users, sessions, evaluations, and LLM usage.
 - One complete idempotent initial database migration: `apps/api/migrations/0001_initial.sql`.
 - Repeatable migration runner with `schema_migrations` tracking.
@@ -1601,7 +1606,7 @@ The following MVP capabilities are implemented in the current repository:
 - Narrow credentialed CORS, origin checks, server-side admin authorization, structured errors/logging, and no automatic paid-provider fallback.
 - Minimal high-value tests for validation, provider-result schema, idempotency, token quota, and rate limiting.
 
-Deployment credentials and external resources (Google OAuth client, Neon database, Cloudflare account/AI binding, Pages project, and production domains) remain operator configuration; they are not committed to this repository.
+Deployment credentials and external resources (Google OAuth client, Neon database, Worker account A, Workers AI account B/token, Pages project, and production domains) remain operator configuration; they are not committed to this repository.
 
 ## 49.3 Implementation change log
 
@@ -1610,5 +1615,11 @@ Deployment credentials and external resources (Google OAuth client, Neon databas
 - Added the portable monorepo architecture and Cloudflare deployment adapters.
 - Added the initial PostgreSQL schema, authentication, evaluation service, Workers AI adapter, frontend, admin usage view, documentation, and critical tests.
 - Added repeatable migration tracking, nullable provider usage aggregation, and a per-user rolling evaluation limit.
+
+### 2026-08-13 — Cross-account Workers AI REST access
+
+- Replaced the account-local Workers AI binding with the authenticated REST API adapter.
+- Added account B's `AI_ACCOUNT_ID` and `AI_API_TOKEN` as required Worker secrets in account A.
+- Added validation and tests for Cloudflare API envelopes, Bearer authentication, structured output, and quota failures.
 
 Future changes must add a new dated entry instead of rewriting this history.

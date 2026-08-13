@@ -4,5 +4,7 @@ export type RuntimeEnv = Env & {
   GOOGLE_CLIENT_ID: string;
   GOOGLE_CLIENT_SECRET: string;
   SESSION_SECRET: string;
+  AI_ACCOUNT_ID: string;
+  AI_API_TOKEN: string;
   LLM_MAX_TOKENS?: string;
 };

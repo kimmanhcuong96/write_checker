@@ -156,7 +156,12 @@ export const createApp = () => {
       throw new AppError(tooLong ? "WRITING_TOO_LONG" : "INVALID_INPUT", parsed.error.issues[0]?.message ?? "Invalid writing request.", 400);
     }
     const db = repositories(context);
-    const service = new EvaluateWritingService(db, new CloudflareWorkersAIProvider(context.env.AI, config.llmModel), config.maximumLlmTokens, config.maximumDailyEvaluations);
+    const service = new EvaluateWritingService(
+      db,
+      new CloudflareWorkersAIProvider(config.aiAccountId, config.aiApiToken, config.llmModel),
+      config.maximumLlmTokens,
+      config.maximumDailyEvaluations
+    );
     const user = context.get("user");
     try {
       const result = await service.execute({

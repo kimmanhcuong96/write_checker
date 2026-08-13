@@ -23,7 +23,10 @@ Hono HTTP adapter (Cloudflare Worker)
          LLMProvider
               │
               ▼
-      Workers AI adapter
+  Workers AI REST adapter
+              │
+              ▼
+   Cloudflare AI account B
 ```
 
 Cloudflare code is confined to `apps/api/src/index.ts`, runtime configuration, and the Workers AI adapter. CEFR rules, schemas, prompts, services, and repository contracts use platform-neutral TypeScript. A Node HTTP adapter or another PostgreSQL/LLM adapter can replace infrastructure without changing the domain.
@@ -42,7 +45,7 @@ apps/web/                  React/Vite Pages frontend
 
 ## Local setup
 
-Prerequisites: Node.js 22+, pnpm 10+, a Neon database, a Google OAuth web client, and a Cloudflare account with Workers AI access.
+Prerequisites: Node.js 22+, pnpm 10+, a Neon database, a Google OAuth web client, a Cloudflare account A for the Worker, and a Cloudflare account B with Workers AI access.
 
 ```bash
 corepack enable
@@ -71,7 +74,7 @@ pnpm dev
 - API: `http://localhost:8787`
 - Health check: `http://localhost:8787/health`
 
-Workers AI uses a remote binding during local development and therefore consumes Cloudflare usage. There is no paid fallback.
+Workers AI is called through Cloudflare's REST API during local development and therefore consumes usage from account B. There is no paid fallback.
 
 ## Environment variables
 
@@ -81,6 +84,8 @@ Workers AI uses a remote binding during local development and therefore consumes
 | `GOOGLE_CLIENT_ID` | no | yes | Dedicated me2write OAuth client ID |
 | `GOOGLE_CLIENT_SECRET` | yes | yes | OAuth client secret |
 | `SESSION_SECRET` | yes | yes | At least 32 characters; signs short-lived OAuth state |
+| `AI_ACCOUNT_ID` | yes | yes | Account ID of Cloudflare account B that owns Workers AI usage |
+| `AI_API_TOKEN` | yes | yes | Account B API token with Workers AI Read and Edit permissions |
 | `APP_ORIGIN` | no | yes | Exact frontend origin used by redirects and credentialed CORS |
 | `API_ORIGIN` | no | yes | Public API origin used for the OAuth callback URL |
 | `ENVIRONMENT` | no | yes | `development` or `production` |
@@ -110,15 +115,17 @@ Create a separate Neon project/database or, at minimum, a dedicated database/sch
 
 The evaluation claim is atomic and `request_id` is unique. A browser retry can return the already-completed result without paying for another inference. Processing and failed duplicate requests return controlled conflicts.
 
-## Workers AI and API deployment
+## Cross-account Workers AI and API deployment
 
-The AI binding is declared in `apps/api/wrangler.jsonc`. Generate binding types whenever that file changes:
+The Worker runs in Cloudflare account A and calls the Workers AI REST endpoint for account B. No `AI` binding is configured because bindings are scoped to the Worker account. The adapter sends `AI_API_TOKEN` only in the server-side `Authorization: Bearer` header.
+
+Generate Worker runtime types whenever `wrangler.jsonc` changes:
 
 ```bash
 pnpm --filter @me2write/api types
 ```
 
-Set production secrets interactively; never add them to `wrangler.jsonc`:
+In account B, create an API token from Workers AI's **Use REST API** flow, or create a custom token with both `Workers AI - Read` and `Workers AI - Edit`. Set the account B ID and token as Worker secrets in account A; never add them to `wrangler.jsonc`:
 
 ```bash
 cd apps/api
@@ -126,6 +133,8 @@ pnpm wrangler secret put DATABASE_URL --env production
 pnpm wrangler secret put GOOGLE_CLIENT_ID --env production
 pnpm wrangler secret put GOOGLE_CLIENT_SECRET --env production
 pnpm wrangler secret put SESSION_SECRET --env production
+pnpm wrangler secret put AI_ACCOUNT_ID --env production
+pnpm wrangler secret put AI_API_TOKEN --env production
 ```
 
 Replace the example production origins/admin list in `wrangler.jsonc`, then validate and deploy:
@@ -146,11 +155,12 @@ pnpm deploy
    ```
 
 2. Create a dedicated Google OAuth web client and register the production callback URL.
-3. Create the Cloudflare Worker and Workers AI binding, then set production secrets with `wrangler secret put`.
-4. Replace the example production origins and admin allowlist in `wrangler.jsonc`.
-5. Run `pnpm check` and `pnpm --filter @me2write/api deploy`.
-6. Create the Cloudflare Pages project from `apps/web`, set `VITE_API_ORIGIN`, build with `pnpm build`, and publish `dist`.
-7. Verify `GET https://api.your-domain.example/health`, Google login, one evaluation, logout, and `/admin/llm-usage` with an allowlisted account.
+3. In account B, create a Workers AI API token with Read and Edit permissions and copy its Account ID.
+4. Create/deploy the Worker in account A and set all production secrets, including `AI_ACCOUNT_ID` and `AI_API_TOKEN`, with `wrangler secret put`.
+5. Replace the example production origins and admin allowlist in `wrangler.jsonc`.
+6. Run `pnpm check` and `pnpm --filter @me2write/api deploy`.
+7. Create the Cloudflare Pages project from `apps/web`, set `VITE_API_ORIGIN`, build with `pnpm build`, and publish `dist`.
+8. Verify `GET https://api.your-domain.example/health`, Google login, one evaluation charged to account B, logout, and `/admin/llm-usage` with an allowlisted account.
 
 Production secrets must never be placed in `vars`, source files, Pages client variables, or committed `.env` files. Only public frontend configuration such as `VITE_API_ORIGIN` belongs in Pages environment variables.
 
@@ -167,7 +177,7 @@ The included `_redirects` supports direct navigation to `/admin/llm-usage`. Conf
 
 ## Change the model or add a provider
 
-Change the active model in the single `LLM_MODEL` runtime variable. The default model supports Workers AI JSON mode.
+Change the active model in the single `LLM_MODEL` runtime variable. The default model supports Workers AI JSON mode. To move AI usage to another Cloudflare account, rotate the `AI_ACCOUNT_ID` and `AI_API_TOKEN` secrets without changing application or domain code.
 
 To add a provider, implement `LLMProvider` in a new infrastructure adapter and select it at application composition. Translate provider output/usage inside that adapter and return the normalized result. Do not add provider SDK details to the evaluation service, domain, or routes; do not silently enable fallback.
 

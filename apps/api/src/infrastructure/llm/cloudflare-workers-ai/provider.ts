@@ -54,28 +54,75 @@ const AiResponseSchema = z.object({
     .optional()
 });
 
+const CloudflareApiEnvelopeSchema = z.object({
+  success: z.boolean(),
+  result: z.unknown().optional(),
+  errors: z
+    .array(
+      z.object({
+        code: z.number().optional(),
+        message: z.string().optional()
+      })
+    )
+    .default([])
+});
+
+const CLOUDFLARE_API_ORIGIN = "https://api.cloudflare.com";
+const WORKERS_AI_RATE_LIMIT_ERROR = 7505;
+
 export class CloudflareWorkersAIProvider implements LLMProvider {
   readonly name = "cloudflare";
 
   constructor(
-    private readonly ai: Ai,
-    readonly model: string
+    private readonly accountId: string,
+    private readonly apiToken: string,
+    readonly model: string,
+    private readonly fetcher: typeof fetch = fetch
   ) {}
 
   async evaluateWriting(input: WritingEvaluationInput): Promise<ProviderEvaluation> {
-    let raw: unknown;
+    let response: Response;
     try {
-      raw = await this.ai.run(this.model, {
-        messages: buildEvaluationMessages(input.text),
-        temperature: 0.2,
-        max_tokens: 1400,
-        response_format: { type: "json_schema", json_schema: responseSchema }
+      response = await this.fetcher(this.endpoint(), {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${this.apiToken}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          messages: buildEvaluationMessages(input.text),
+          temperature: 0.2,
+          max_tokens: 1400,
+          response_format: { type: "json_schema", json_schema: responseSchema }
+        })
       });
     } catch (error) {
       throw new AppError("PROVIDER_UNAVAILABLE", "The writing evaluator is temporarily unavailable.", 503, error);
     }
 
-    const envelope = AiResponseSchema.safeParse(raw);
+    let rawEnvelope: unknown;
+    try {
+      rawEnvelope = await response.json();
+    } catch (error) {
+      throw new AppError("INVALID_PROVIDER_OUTPUT", "The evaluator returned an invalid response.", 502, error);
+    }
+
+    const apiEnvelope = CloudflareApiEnvelopeSchema.safeParse(rawEnvelope);
+    if (!apiEnvelope.success) {
+      throw new AppError("INVALID_PROVIDER_OUTPUT", "The evaluator returned an invalid response.", 502, apiEnvelope.error);
+    }
+    if (!response.ok || !apiEnvelope.data.success) {
+      const isQuotaError =
+        response.status === 429 || apiEnvelope.data.errors.some((error) => error.code === WORKERS_AI_RATE_LIMIT_ERROR);
+      throw new AppError(
+        isQuotaError ? "AI_QUOTA_UNAVAILABLE" : "PROVIDER_UNAVAILABLE",
+        isQuotaError ? "The AI evaluation quota is temporarily unavailable." : "The writing evaluator is temporarily unavailable.",
+        503,
+        apiEnvelope.data.errors
+      );
+    }
+
+    const envelope = AiResponseSchema.safeParse(apiEnvelope.data.result);
     if (!envelope.success) {
       throw new AppError("INVALID_PROVIDER_OUTPUT", "The evaluator returned an invalid response.", 502, envelope.error);
     }
@@ -106,5 +153,13 @@ export class CloudflareWorkersAIProvider implements LLMProvider {
     } catch (error) {
       throw new AppError("INVALID_PROVIDER_OUTPUT", "The evaluator returned malformed JSON.", 502, error);
     }
+  }
+
+  private endpoint(): string {
+    const modelPath = this.model
+      .split("/")
+      .map((segment) => encodeURIComponent(segment).replace(/^%40/u, "@"))
+      .join("/");
+    return `${CLOUDFLARE_API_ORIGIN}/client/v4/accounts/${encodeURIComponent(this.accountId)}/ai/run/${modelPath}`;
   }
 }
