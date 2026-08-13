@@ -73,4 +73,28 @@ describe("EvaluateWritingService cost protection", () => {
     await expect(service.execute({ requestId: fresh.requestId, userId: fresh.userId, text: "New text", wordCount: 2 })).rejects.toMatchObject({ code: "RATE_LIMITED" });
     expect(evaluate).not.toHaveBeenCalled();
   });
+
+  it("identifies a daily-limit database failure instead of misreporting the AI provider", async () => {
+    const fresh = record("processing", null);
+    const db = repository(vi.fn(() => Promise.resolve({ record: fresh, created: true })));
+    db.countEvaluationsSince = vi.fn(() => Promise.reject(Object.assign(new Error("database unavailable"), { code: "XX000" })));
+    const evaluate = vi.fn(() => Promise.resolve({ result, usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2, providerUsageValue: null, providerUsageUnit: null } }));
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const service = new EvaluateWritingService(db, provider(evaluate), null, 30);
+
+    await expect(
+      service.execute({ requestId: fresh.requestId, userId: fresh.userId, text: "New text", wordCount: 2 })
+    ).rejects.toMatchObject({ code: "INTERNAL_ERROR", status: 500 });
+    expect(evaluate).not.toHaveBeenCalled();
+    expect(consoleError).toHaveBeenCalledWith(
+      JSON.stringify({
+        event: "evaluation_pipeline_failed",
+        stage: "daily_limit_check",
+        evaluationRequestId: fresh.requestId,
+        errorType: "Error",
+        errorCode: "XX000"
+      })
+    );
+    consoleError.mockRestore();
+  });
 });

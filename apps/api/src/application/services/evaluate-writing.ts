@@ -2,6 +2,23 @@ import { AppError } from "../errors";
 import type { LLMProvider } from "../ports/llm-provider";
 import type { EvaluationRecord, EvaluationRepository } from "../ports/repositories";
 
+type EvaluationStage = "token_quota_check" | "daily_limit_check" | "provider_evaluation" | "result_persistence";
+
+const logPipelineFailure = (stage: EvaluationStage | "failure_persistence", evaluationRequestId: string, error: unknown) => {
+  console.error(
+    JSON.stringify({
+      event: "evaluation_pipeline_failed",
+      stage,
+      evaluationRequestId,
+      errorType: error instanceof AppError ? error.code : error instanceof Error ? error.name : "unknown",
+      errorCode:
+        typeof error === "object" && error !== null && "code" in error && typeof error.code === "string"
+          ? error.code
+          : undefined
+    })
+  );
+};
+
 export class EvaluateWritingService {
   constructor(
     private readonly evaluations: EvaluationRepository,
@@ -41,6 +58,7 @@ export class EvaluateWritingService {
       providerUsageUnit: null
     };
 
+    let stage: EvaluationStage = "token_quota_check";
     try {
       if (this.maximumTokens !== null) {
         const consumed = await this.evaluations.consumedTokens();
@@ -50,19 +68,30 @@ export class EvaluateWritingService {
         }
       }
 
+      stage = "daily_limit_check";
       const dailyCount = await this.evaluations.countEvaluationsSince(input.userId, new Date(Date.now() - 24 * 60 * 60 * 1000));
       if (dailyCount > this.maximumDailyEvaluations) {
         await this.evaluations.fail(claim.record.id, emptyUsage, "rate_limited");
         throw new AppError("RATE_LIMITED", "You have reached the daily evaluation limit. Please try again tomorrow.", 429);
       }
 
+      stage = "provider_evaluation";
       const providerResult = await this.llm.evaluateWriting({ text: input.text, wordCount: input.wordCount });
+      stage = "result_persistence";
       await this.evaluations.complete(claim.record.id, providerResult.result, providerResult.usage);
       return { ...claim.record, status: "completed", result: providerResult.result };
     } catch (error) {
       if (error instanceof AppError && (error.code === "AI_QUOTA_UNAVAILABLE" || error.code === "RATE_LIMITED")) throw error;
-      const normalized = error instanceof AppError ? error : new AppError("PROVIDER_UNAVAILABLE", "The writing evaluator is temporarily unavailable.", 503, error);
-      await this.evaluations.fail(claim.record.id, emptyUsage, normalized.code.toLowerCase());
+      logPipelineFailure(stage, input.requestId, error);
+      const normalized =
+        error instanceof AppError
+          ? error
+          : new AppError("INTERNAL_ERROR", "The evaluation could not be completed because an internal dependency failed.", 500, error);
+      try {
+        await this.evaluations.fail(claim.record.id, emptyUsage, normalized.code.toLowerCase());
+      } catch (persistenceError) {
+        logPipelineFailure("failure_persistence", input.requestId, persistenceError);
+      }
       throw normalized;
     }
   }

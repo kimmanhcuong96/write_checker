@@ -123,6 +123,8 @@ The Worker runs in Cloudflare account A and calls the Workers AI REST endpoint f
 
 If an evaluation returns `PROVIDER_UNAVAILABLE`, open the production Worker logs and filter for `workers_ai_request_failed`. The event includes only safe diagnostics (`reason`, upstream HTTP status, Cloudflare Ray ID, and Cloudflare error codes/messages); it never includes the API token, account ID, prompt, or submitted writing. An immediate `401`/`403` usually means `AI_ACCOUNT_ID` and `AI_API_TOKEN` do not belong to the same account, the token is invalid, or its account-B scope lacks both Workers AI Read and Edit. A `404` usually indicates an incorrect account/model path, while `429` indicates quota/rate limiting.
 
+If there is no `workers_ai_request_failed` event, filter for `evaluation_pipeline_failed`. Its `stage` distinguishes `token_quota_check`, `daily_limit_check`, `provider_evaluation`, `result_persistence`, and `failure_persistence`. Database or persistence failures return `INTERNAL_ERROR` rather than being mislabeled as provider outages.
+
 Generate Worker runtime types whenever `wrangler.jsonc` changes:
 
 ```bash
@@ -208,6 +210,20 @@ pnpm check
 ```
 
 The initial suite intentionally covers only high-value pure validation. Type checking, linting, test, and production builds are the main MVP gates.
+
+## Production request debugging
+
+Every API response includes `X-Request-Id`. Error JSON also includes `error.requestId`, and the frontend displays it as a support reference. Search that UUID in Cloudflare Workers Logs to correlate the request safely.
+
+Structured events are intentionally distinct:
+
+- `request_completed`: every request, including method, path, status, outcome, latency, Cloudflare Ray ID, and HTTP request ID.
+- `request_failed`: every thrown controlled or unexpected error, including normalized error code and safe cause type/code.
+- `evaluation_pipeline_failed`: the exact evaluation stage that failed.
+- `workers_ai_request_failed`: upstream Workers AI HTTP/network/envelope diagnostics.
+- `evaluation_completed` / `evaluation_failed`: evaluation-level outcome, using `evaluationRequestId` separately from `httpRequestId`.
+
+Logs never include cookies, authorization headers, session/API tokens, database URLs, OAuth credentials, submitted writing, prompts, or raw provider output. Use `httpRequestId` for HTTP correlation and `evaluationRequestId` only for evaluation idempotency; do not confuse either with Cloudflare's platform request identifier.
 
 ## Keeping the specification current
 

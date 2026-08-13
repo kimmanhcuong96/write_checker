@@ -11,7 +11,7 @@ export type Evaluation = {
 };
 
 export type EvaluationResponse = { id: string; status: "processing" | "completed" | "failed"; evaluation: Evaluation | null };
-export type ApiError = { error: { code: string; message: string } };
+export type ApiError = { error: { code: string; message: string; requestId?: string } };
 
 export type UsageDashboard = {
   summaries: Array<{ period: "today" | "week" | "month" | "year"; requests: number; successfulRequests: number; failedRequests: number; inputTokens: number | null; outputTokens: number | null; totalTokens: number | null; providerUsage: Array<{ unit: string; value: number }> }>;

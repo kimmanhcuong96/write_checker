@@ -14,7 +14,7 @@ export function App() {
   const [text, setText] = useState("");
   const [result, setResult] = useState<EvaluationResponse | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<{ code: string; message: string } | null>(null);
+  const [error, setError] = useState<{ code: string; message: string; requestId: string | undefined } | null>(null);
   const [requestId, setRequestId] = useState<string | null>(null);
   const [progressIndex, setProgressIndex] = useState(0);
   const [maximumWords, setMaximumWords] = useState(1000);
@@ -42,7 +42,7 @@ export function App() {
       setResult(response); setRequestId(null);
     } catch (reason) {
       const normalized = reason instanceof RequestError ? reason : new RequestError("UNKNOWN_ERROR", "We couldn't check your writing. Please try again.", 500);
-      setError({ code: normalized.code, message: normalized.message });
+      setError({ code: normalized.code, message: normalized.message, requestId: normalized.requestId });
       if (["INVALID_INPUT", "WRITING_TOO_LONG", "EVALUATION_FAILED", "DUPLICATE_REQUEST"].includes(normalized.code)) setRequestId(null);
       if (normalized.code === "AUTH_REQUIRED") setUser(null);
     } finally { setSubmitting(false); }
@@ -63,7 +63,7 @@ export function App() {
         </form>
         {submitting && <div className="analysis-status" role="status"><span className="pulse-dot"/><p>{progressCopy[progressIndex]}</p></div>}
         {words > maximumWords && <div id="writing-error" className="error-banner" role="alert">Your writing is {words - maximumWords} words over the limit.</div>}
-        {error && <div id="writing-error" className={`error-banner ${error.code === "AI_QUOTA_UNAVAILABLE" ? "quota" : ""}`} role="alert"><div><strong>{error.code === "AI_QUOTA_UNAVAILABLE" ? "Evaluation temporarily paused" : "We couldn't finish that check"}</strong><p>{error.message}</p></div>{error.code !== "AI_QUOTA_UNAVAILABLE" && user && <button type="button" onClick={(event) => { void submit(event as unknown as React.FormEvent); }}>Try again</button>}</div>}
+        {error && <div id="writing-error" className={`error-banner ${error.code === "AI_QUOTA_UNAVAILABLE" ? "quota" : ""}`} role="alert"><div><strong>{error.code === "AI_QUOTA_UNAVAILABLE" ? "Evaluation temporarily paused" : "We couldn't finish that check"}</strong><p>{error.message}</p>{error.requestId && <small>Reference: {error.requestId}</small>}</div>{error.code !== "AI_QUOTA_UNAVAILABLE" && user && <button type="button" onClick={(event) => { void submit(event as unknown as React.FormEvent); }}>Try again</button>}</div>}
       </section>
       {result?.evaluation && <EvaluationResult result={result.evaluation} />}
     </main>}

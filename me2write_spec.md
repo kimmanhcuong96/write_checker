@@ -945,7 +945,8 @@ Example conceptual format:
 {
   "error": {
     "code": "WRITING_TOO_LONG",
-    "message": "Your writing exceeds the maximum allowed length."
+    "message": "Your writing exceeds the maximum allowed length.",
+    "requestId": "server-generated-correlation-id"
   }
 }
 ```
@@ -1106,7 +1107,8 @@ Keep observability lightweight.
 
 Log useful structured events:
 
-- request ID,
+- a server-generated HTTP request ID returned through `X-Request-Id` and `error.requestId`,
+- separate `httpRequestId` and client evaluation idempotency `evaluationRequestId` fields,
 - evaluation ID,
 - user ID or safe internal identifier,
 - provider,
@@ -1115,6 +1117,8 @@ Log useful structured events:
 - latency,
 - usage metadata,
 - normalized error type.
+
+Log one completion event for every request and one normalized failure event for every thrown error. Evaluation and Workers AI adapters may add stage-specific events correlated through the same Worker trace. Logs must not contain cookies, authorization headers, secrets, connection strings, submitted writing, prompts, or raw provider output.
 
 Do not build a complex observability stack for the MVP.
 
@@ -1637,5 +1641,12 @@ Deployment credentials and external resources (Google OAuth client, Neon databas
 
 - Added structured server-side diagnostics for cross-account Workers AI network, HTTP, envelope, and JSON failures.
 - Logs may include upstream HTTP status, Cloudflare Ray ID, and provider error codes/messages, but never the API token, account ID, prompt, or submitted writing.
+- Added stage-aware evaluation-pipeline diagnostics and stopped classifying database/quota/persistence dependency failures as Workers AI outages.
+
+### 2026-08-13 — Request-correlated production logging
+
+- Added a server-generated `X-Request-Id` to every response and the same `requestId` to API error bodies and frontend support references.
+- Added structured completion and failure events for all HTTP requests with safe method, path, status, latency, Ray ID, normalized error, and cause-code fields.
+- Separated HTTP correlation IDs from evaluation idempotency IDs and documented the strict no-secret/no-content logging policy.
 
 Future changes must add a new dated entry instead of rewriting this history.

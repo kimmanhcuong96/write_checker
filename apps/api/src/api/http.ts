@@ -15,11 +15,39 @@ import { NeonRepositories } from "../infrastructure/db/neon/neon-repositories";
 import { CloudflareWorkersAIProvider } from "../infrastructure/llm/cloudflare-workers-ai/provider";
 import type { RuntimeEnv } from "../infrastructure/runtime/cloudflare/bindings";
 
-type AppVariables = { user: AuthenticatedUser };
+type AppVariables = {
+  user: AuthenticatedUser;
+  httpRequestId: string;
+  requestStartedAt: number;
+};
 type AppContext = Context<{ Bindings: RuntimeEnv; Variables: AppVariables }>;
 const SESSION_COOKIE = "me2write_session";
 const OAUTH_STATE_COOKIE = "me2write_oauth_state";
 const OAUTH_VERIFIER_COOKIE = "me2write_oauth_verifier";
+
+const errorProperty = (value: unknown, property: string): string | number | undefined => {
+  if (typeof value !== "object" || value === null || !(property in value)) return undefined;
+  const candidate = value[property as keyof typeof value];
+  return typeof candidate === "string" || typeof candidate === "number" ? candidate : undefined;
+};
+
+const requestFields = (values: {
+  httpRequestId: string;
+  cfRay: string | null;
+  method: string;
+  path: string;
+  requestStartedAt: number;
+}) => ({
+  httpRequestId: values.httpRequestId,
+  cfRay: values.cfRay,
+  method: values.method,
+  path: values.path,
+  latencyMs: Date.now() - values.requestStartedAt
+});
+
+const errorPayload = (requestId: string, code: string, message: string) => ({
+  error: { code, message, requestId }
+});
 
 const repositories = (context: AppContext) => new NeonRepositories(readConfig(context.env).databaseUrl);
 
@@ -50,6 +78,26 @@ const evaluationResponse = (record: { id: string; status: string; result: unknow
 export const createApp = () => {
   const app = new Hono<{ Bindings: RuntimeEnv; Variables: AppVariables }>();
 
+  app.use("*", async (context, next) => {
+    context.set("httpRequestId", crypto.randomUUID());
+    context.set("requestStartedAt", Date.now());
+    context.header("X-Request-Id", context.get("httpRequestId"));
+    await next();
+    console.log(
+      JSON.stringify({
+        event: "request_completed",
+        ...requestFields({
+          httpRequestId: context.get("httpRequestId"),
+          cfRay: context.req.header("cf-ray") ?? null,
+          method: context.req.method,
+          path: context.req.path,
+          requestStartedAt: context.get("requestStartedAt")
+        }),
+        status: context.res.status,
+        outcome: context.res.status >= 400 ? "error" : "success"
+      })
+    );
+  });
   app.use("*", secureHeaders());
   app.use("*", async (context, next) => {
     const isBrowserApiRoute = context.req.path.startsWith("/api/") || context.req.path === "/auth/logout";
@@ -66,6 +114,7 @@ export const createApp = () => {
     if (originAllowed) {
       context.header("Access-Control-Allow-Origin", origin);
       context.header("Access-Control-Allow-Credentials", "true");
+      context.header("Access-Control-Expose-Headers", "X-Request-Id");
       context.header("Vary", "Origin");
     }
     if (context.req.method === "OPTIONS") {
@@ -80,7 +129,7 @@ export const createApp = () => {
     }
     await next();
   });
-  app.use("/api/evaluations", bodyLimit({ maxSize: 24 * 1024, onError: (context) => context.json({ error: { code: "INVALID_INPUT", message: "Request body is too large." } }, 413) }));
+  app.use("/api/evaluations", bodyLimit({ maxSize: 24 * 1024, onError: (context) => context.json(errorPayload(context.get("httpRequestId") as string, "INVALID_INPUT", "Request body is too large."), 413) }));
 
   app.get("/health", (context) => context.json({ status: "ok" }));
   app.get("/api/config", (context) => context.json({ maximumWritingWords: readConfig(context.env).maximumWritingWords }));
@@ -169,10 +218,10 @@ export const createApp = () => {
         text: parsed.data.text,
         wordCount: countWords(parsed.data.text)
       });
-      console.log(JSON.stringify({ event: "evaluation_completed", requestId: parsed.data.requestId, evaluationId: result.id, userId: user.id, provider: config.llmProvider, model: config.llmModel, latencyMs: Date.now() - startedAt }));
+      console.log(JSON.stringify({ event: "evaluation_completed", httpRequestId: context.get("httpRequestId"), evaluationRequestId: parsed.data.requestId, evaluationId: result.id, userId: user.id, provider: config.llmProvider, model: config.llmModel, latencyMs: Date.now() - startedAt }));
       return context.json(evaluationResponse(result), result.status === "completed" ? 200 : 202);
     } catch (error) {
-      console.error(JSON.stringify({ event: "evaluation_failed", requestId: parsed.data.requestId, userId: user.id, provider: config.llmProvider, model: config.llmModel, latencyMs: Date.now() - startedAt, errorType: error instanceof AppError ? error.code : "INTERNAL_ERROR" }));
+      console.error(JSON.stringify({ event: "evaluation_failed", httpRequestId: context.get("httpRequestId"), evaluationRequestId: parsed.data.requestId, userId: user.id, provider: config.llmProvider, model: config.llmModel, latencyMs: Date.now() - startedAt, errorType: error instanceof AppError ? error.code : "INTERNAL_ERROR" }));
       throw error;
     }
   });
@@ -187,11 +236,29 @@ export const createApp = () => {
     return context.json(await repositories(context).usageDashboard());
   });
 
-  app.notFound((context) => context.json({ error: { code: "NOT_FOUND", message: "Route not found." } }, 404));
+  app.notFound((context) => context.json(errorPayload(context.get("httpRequestId"), "NOT_FOUND", "Route not found."), 404));
   app.onError((error, context) => {
-    if (error instanceof AppError) return context.json({ error: { code: error.code, message: error.message } }, error.status as 400);
-    console.error(JSON.stringify({ event: "unhandled_error", path: context.req.path, errorType: error instanceof Error ? error.name : "unknown" }));
-    return context.json({ error: { code: "INTERNAL_ERROR", message: "An unexpected error occurred." } }, 500);
+    const appError = error instanceof AppError ? error : null;
+    const cause = appError?.cause;
+    console.error(
+      JSON.stringify({
+        event: "request_failed",
+        ...requestFields({
+          httpRequestId: context.get("httpRequestId"),
+          cfRay: context.req.header("cf-ray") ?? null,
+          method: context.req.method,
+          path: context.req.path,
+          requestStartedAt: context.get("requestStartedAt")
+        }),
+        status: appError?.status ?? 500,
+        errorCode: appError?.code ?? "INTERNAL_ERROR",
+        errorType: error instanceof Error ? error.name : "unknown",
+        causeType: cause instanceof Error ? cause.name : undefined,
+        causeCode: errorProperty(cause, "code") ?? errorProperty(error, "code")
+      })
+    );
+    if (appError) return context.json(errorPayload(context.get("httpRequestId"), appError.code, appError.message), appError.status as 400);
+    return context.json(errorPayload(context.get("httpRequestId"), "INTERNAL_ERROR", "An unexpected error occurred."), 500);
   });
   return app;
 };
