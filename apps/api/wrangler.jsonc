@@ -1,0 +1,39 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "me2write-api",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-13",
+  "compatibility_flags": ["nodejs_compat"],
+  "ai": { "binding": "AI", "remote": true },
+  "vars": {
+    "ENVIRONMENT": "development",
+    "APP_ORIGIN": "http://localhost:5173",
+    "API_ORIGIN": "http://localhost:8787",
+    "LLM_PROVIDER": "cloudflare",
+    "LLM_MODEL": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+    "MAX_WRITING_WORDS": "1000",
+    "MAX_EVALUATIONS_PER_DAY": "30",
+    "ADMIN_EMAILS": ""
+  },
+  "observability": {
+    "enabled": true,
+    "logs": { "head_sampling_rate": 1 },
+    "traces": { "enabled": true, "head_sampling_rate": 0.05 }
+  },
+  "env": {
+    "production": {
+      "name": "me2write-api-production",
+      "ai": { "binding": "AI" },
+      "vars": {
+        "ENVIRONMENT": "production",
+        "APP_ORIGIN": "https://me2write.example.com",
+        "API_ORIGIN": "https://api.me2write.example.com",
+        "LLM_PROVIDER": "cloudflare",
+        "LLM_MODEL": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+        "MAX_WRITING_WORDS": "1000",
+        "MAX_EVALUATIONS_PER_DAY": "30",
+        "ADMIN_EMAILS": ""
+      }
+    }
+  }
+}
