@@ -42,12 +42,10 @@ export type AppConfig = {
 export const readConfig = (env: RuntimeEnv): AppConfig => {
   const parsed = ConfigSchema.safeParse(env);
   if (!parsed.success) {
-    console.error(
-      JSON.stringify({
-        event: "invalid_runtime_config",
-        fields: parsed.error.issues.map((issue) => issue.path.join(".") || "root")
-      })
-    );
+    const details = parsed.error.issues
+      .map((issue) => `${issue.path.join(".") || "root"}: ${issue.message}`)
+      .join("; ");
+    console.error(`INVALID_RUNTIME_CONFIG ${details}`);
     throw new Error("Invalid runtime configuration.");
   }
   const value = parsed.data;
