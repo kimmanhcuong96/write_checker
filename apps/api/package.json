@@ -6,7 +6,7 @@
     "dev": "wrangler dev",
     "prebuild": "wrangler types",
     "build": "wrangler deploy --dry-run --env=\"\" --outdir dist",
-    "deploy": "wrangler deploy --env production",
+    "deploy": "wrangler deploy --env production --keep-vars",
     "db:migrate": "node scripts/migrate.mjs",
     "pretypecheck": "wrangler types",
     "typecheck": "tsc --noEmit",
