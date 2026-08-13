@@ -76,6 +76,7 @@ const logProviderFailure = (details: {
   cfRay?: string | null;
   errors?: Array<{ code?: number | undefined; message?: string | undefined }>;
   errorType?: string;
+  networkErrorKind?: "invalid_header" | "invalid_url" | "subrequest_failed" | "unknown";
 }) => {
   console.error(
     JSON.stringify({
@@ -84,6 +85,15 @@ const logProviderFailure = (details: {
       errors: details.errors?.slice(0, 5)
     })
   );
+};
+
+const classifyNetworkError = (error: unknown): "invalid_header" | "invalid_url" | "subrequest_failed" | "unknown" => {
+  if (!(error instanceof Error)) return "unknown";
+  const message = error.message.toLowerCase();
+  if (message.includes("header") || message.includes("character")) return "invalid_header";
+  if (message.includes("url")) return "invalid_url";
+  if (message.includes("fetch") || message.includes("network") || message.includes("subrequest")) return "subrequest_failed";
+  return "unknown";
 };
 
 export class CloudflareWorkersAIProvider implements LLMProvider {
@@ -115,7 +125,8 @@ export class CloudflareWorkersAIProvider implements LLMProvider {
     } catch (error) {
       logProviderFailure({
         reason: "network_error",
-        errorType: error instanceof Error ? error.name : "unknown"
+        errorType: error instanceof Error ? error.name : "unknown",
+        networkErrorKind: classifyNetworkError(error)
       });
       throw new AppError("PROVIDER_UNAVAILABLE", "The writing evaluator is temporarily unavailable.", 503, error);
     }

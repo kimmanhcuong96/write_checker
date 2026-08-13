@@ -12,7 +12,7 @@ const env = {
   SESSION_SECRET: "12345678901234567890123456789012",
   LLM_PROVIDER: "cloudflare",
   LLM_MODEL: "@cf/meta/test-model",
-  AI_ACCOUNT_ID: "account-b",
+  AI_ACCOUNT_ID: "0123456789abcdef0123456789abcdef",
   AI_API_TOKEN: "api-token",
   MAX_WRITING_WORDS: "1000",
   MAX_EVALUATIONS_PER_DAY: "30",

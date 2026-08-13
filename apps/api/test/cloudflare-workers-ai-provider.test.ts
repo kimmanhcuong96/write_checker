@@ -119,6 +119,27 @@ describe("CloudflareWorkersAIProvider REST adapter", () => {
     consoleError.mockRestore();
   });
 
+  it("classifies a fetch TypeError without logging credentials", async () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const fetcher = vi.fn<typeof fetch>(() => Promise.reject(new TypeError("Invalid character in header value")));
+    const provider = new CloudflareWorkersAIProvider("account-b", "secret-token", "@cf/meta/model", fetcher);
+
+    await expect(provider.evaluateWriting({ text: "This is my writing.", wordCount: 4 })).rejects.toMatchObject({
+      code: "PROVIDER_UNAVAILABLE",
+      status: 503
+    });
+    const log = String(consoleError.mock.calls[0]?.[0]);
+    expect(JSON.parse(log)).toEqual({
+      event: "workers_ai_request_failed",
+      reason: "network_error",
+      errorType: "TypeError",
+      networkErrorKind: "invalid_header"
+    });
+    expect(log).not.toContain("secret-token");
+    expect(log).not.toContain("account-b");
+    consoleError.mockRestore();
+  });
+
   it("rejects a malformed successful Cloudflare response", async () => {
     const fetcher = vi.fn<typeof fetch>(() =>
       Promise.resolve(Response.json({ success: true, result: { response: "not json" }, errors: [], messages: [] }))

@@ -123,6 +123,8 @@ The Worker runs in Cloudflare account A and calls the Workers AI REST endpoint f
 
 If an evaluation returns `PROVIDER_UNAVAILABLE`, open the production Worker logs and filter for `workers_ai_request_failed`. The event includes only safe diagnostics (`reason`, upstream HTTP status, Cloudflare Ray ID, and Cloudflare error codes/messages); it never includes the API token, account ID, prompt, or submitted writing. An immediate `401`/`403` usually means `AI_ACCOUNT_ID` and `AI_API_TOKEN` do not belong to the same account, the token is invalid, or its account-B scope lacks both Workers AI Read and Edit. A `404` usually indicates an incorrect account/model path, while `429` indicates quota/rate limiting.
 
+A `network_error` with `TypeError` means no upstream HTTP response was received. Check `networkErrorKind`: `invalid_header` usually means the dashboard secret contains whitespace/newlines or the value incorrectly includes the `Bearer ` prefix; `invalid_url` means the account/model endpoint is malformed; `subrequest_failed` means the Worker could not complete the outbound fetch. Runtime config trims surrounding whitespace, validates account IDs as 32 hexadecimal characters, and rejects whitespace inside API tokens.
+
 If there is no `workers_ai_request_failed` event, filter for `evaluation_pipeline_failed`. Its `stage` distinguishes `token_quota_check`, `daily_limit_check`, `provider_evaluation`, `result_persistence`, and `failure_persistence`. Database or persistence failures return `INTERNAL_ERROR` rather than being mislabeled as provider outages.
 
 Generate Worker runtime types whenever `wrangler.jsonc` changes:
@@ -221,6 +223,7 @@ Structured events are intentionally distinct:
 - `request_failed`: every thrown controlled or unexpected error, including normalized error code and safe cause type/code.
 - `evaluation_pipeline_failed`: the exact evaluation stage that failed.
 - `workers_ai_request_failed`: upstream Workers AI HTTP/network/envelope diagnostics.
+- `runtime_config_invalid`: invalid or malformed Worker variables/secrets, identified by field without logging their values.
 - `evaluation_completed` / `evaluation_failed`: evaluation-level outcome, using `evaluationRequestId` separately from `httpRequestId`.
 
 Logs never include cookies, authorization headers, session/API tokens, database URLs, OAuth credentials, submitted writing, prompts, or raw provider output. Use `httpRequestId` for HTTP correlation and `evaluationRequestId` only for evaluation idempotency; do not confuse either with Cloudflare's platform request identifier.

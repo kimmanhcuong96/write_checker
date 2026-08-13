@@ -13,8 +13,8 @@ const ConfigSchema = z.object({
   SESSION_SECRET: z.string().min(32),
   LLM_PROVIDER: z.literal("cloudflare"),
   LLM_MODEL: z.string().regex(/^@[a-z0-9._-]+(?:\/[a-z0-9._-]+){2,}$/iu, "Invalid Workers AI model identifier"),
-  AI_ACCOUNT_ID: z.string().min(1),
-  AI_API_TOKEN: z.string().min(1),
+  AI_ACCOUNT_ID: z.string().trim().regex(/^[a-f0-9]{32}$/iu, "Invalid Cloudflare account ID"),
+  AI_API_TOKEN: z.string().trim().min(1).regex(/^\S+$/u, "Workers AI API token must not contain whitespace"),
   MAX_WRITING_WORDS: PositiveIntegerString.default(1000),
   MAX_EVALUATIONS_PER_DAY: PositiveIntegerString.default(30),
   LLM_MAX_TOKENS: PositiveIntegerString.optional(),
@@ -42,10 +42,15 @@ export type AppConfig = {
 export const readConfig = (env: RuntimeEnv): AppConfig => {
   const parsed = ConfigSchema.safeParse(env);
   if (!parsed.success) {
-    const details = parsed.error.issues
-      .map((issue) => `${issue.path.join(".") || "root"}: ${issue.message}`)
-      .join("; ");
-    console.error(`INVALID_RUNTIME_CONFIG ${details}`);
+    console.error(
+      JSON.stringify({
+        event: "runtime_config_invalid",
+        issues: parsed.error.issues.map((issue) => ({
+          field: issue.path.join(".") || "root",
+          reason: issue.message
+        }))
+      })
+    );
     throw new Error("Invalid runtime configuration.");
   }
   const value = parsed.data;

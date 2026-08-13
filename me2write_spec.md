@@ -1642,6 +1642,7 @@ Deployment credentials and external resources (Google OAuth client, Neon databas
 - Added structured server-side diagnostics for cross-account Workers AI network, HTTP, envelope, and JSON failures.
 - Logs may include upstream HTTP status, Cloudflare Ray ID, and provider error codes/messages, but never the API token, account ID, prompt, or submitted writing.
 - Added stage-aware evaluation-pipeline diagnostics and stopped classifying database/quota/persistence dependency failures as Workers AI outages.
+- Normalize surrounding whitespace and validate the Cloudflare account ID/API token before constructing the REST request; classify fetch `TypeError` failures without logging raw exception messages or credentials.
 
 ### 2026-08-13 — Request-correlated production logging
 
