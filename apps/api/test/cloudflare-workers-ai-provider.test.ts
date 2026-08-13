@@ -46,6 +46,7 @@ describe("CloudflareWorkersAIProvider REST adapter", () => {
     expect(result.result).toEqual(evaluation);
     expect(result.usage.totalTokens).toBe(30);
     expect(fetcher).toHaveBeenCalledOnce();
+    expect(fetcher.mock.instances[0]).toBeUndefined();
     const [url, init] = fetcher.mock.calls[0] ?? [];
     expect(url).toBe(
       "https://api.cloudflare.com/client/v4/accounts/account-b/ai/run/@cf/meta/llama-3.3-70b-instruct-fp8-fast"

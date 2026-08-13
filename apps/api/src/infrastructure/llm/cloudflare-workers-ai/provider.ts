@@ -76,7 +76,7 @@ const logProviderFailure = (details: {
   cfRay?: string | null;
   errors?: Array<{ code?: number | undefined; message?: string | undefined }>;
   errorType?: string;
-  networkErrorKind?: "invalid_header" | "invalid_url" | "subrequest_failed" | "unknown";
+  networkErrorKind?: "invalid_receiver" | "invalid_header" | "invalid_url" | "subrequest_failed" | "unknown";
 }) => {
   console.error(
     JSON.stringify({
@@ -87,9 +87,10 @@ const logProviderFailure = (details: {
   );
 };
 
-const classifyNetworkError = (error: unknown): "invalid_header" | "invalid_url" | "subrequest_failed" | "unknown" => {
+const classifyNetworkError = (error: unknown): "invalid_receiver" | "invalid_header" | "invalid_url" | "subrequest_failed" | "unknown" => {
   if (!(error instanceof Error)) return "unknown";
   const message = error.message.toLowerCase();
+  if (message.includes("illegal invocation") || message.includes("incorrect this")) return "invalid_receiver";
   if (message.includes("header") || message.includes("character")) return "invalid_header";
   if (message.includes("url")) return "invalid_url";
   if (message.includes("fetch") || message.includes("network") || message.includes("subrequest")) return "subrequest_failed";
@@ -103,13 +104,17 @@ export class CloudflareWorkersAIProvider implements LLMProvider {
     private readonly accountId: string,
     private readonly apiToken: string,
     readonly model: string,
-    private readonly fetcher: typeof fetch = fetch
+    private readonly fetcher?: typeof fetch
   ) {}
 
   async evaluateWriting(input: WritingEvaluationInput): Promise<ProviderEvaluation> {
     let response: Response;
     try {
-      response = await this.fetcher(this.endpoint(), {
+      // Keep the platform global as a direct fetch() call. Calling a captured
+      // Web API function as this.fetcher() supplies the provider instance as
+      // its receiver and workerd rejects it with "Illegal invocation".
+      const executeFetch: typeof fetch = this.fetcher ?? ((resource, init) => fetch(resource, init));
+      response = await executeFetch(this.endpoint(), {
         method: "POST",
         headers: {
           Authorization: `Bearer ${this.apiToken}`,
