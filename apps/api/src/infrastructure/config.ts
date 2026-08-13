@@ -40,7 +40,17 @@ export type AppConfig = {
 };
 
 export const readConfig = (env: RuntimeEnv): AppConfig => {
-  const value = ConfigSchema.parse(env);
+  const parsed = ConfigSchema.safeParse(env);
+  if (!parsed.success) {
+    console.error(
+      JSON.stringify({
+        event: "invalid_runtime_config",
+        fields: parsed.error.issues.map((issue) => issue.path.join(".") || "root")
+      })
+    );
+    throw new Error("Invalid runtime configuration.");
+  }
+  const value = parsed.data;
   return {
     environment: value.ENVIRONMENT,
     appOrigin: value.APP_ORIGIN.replace(/\/$/u, ""),
