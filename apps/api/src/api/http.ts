@@ -64,19 +64,25 @@ export const createApp = () => {
       await next();
       return;
     }
-    const config = readConfig(context.env);
     const origin = context.req.header("origin");
-    if (isBrowserApiRoute && origin === config.appOrigin) {
+    // Handle CORS before parsing the full application config. This ensures
+    // browser preflight requests still receive the proper headers when an
+    // unrelated runtime secret is missing or invalid.
+    const configuredAppOrigin = typeof context.env.APP_ORIGIN === "string" ? context.env.APP_ORIGIN.replace(/\/$/u, "") : "";
+    const originAllowed = Boolean(origin && origin === configuredAppOrigin);
+    if (originAllowed) {
       context.header("Access-Control-Allow-Origin", origin);
       context.header("Access-Control-Allow-Credentials", "true");
       context.header("Vary", "Origin");
     }
-    if (isBrowserApiRoute && context.req.method === "OPTIONS") {
+    if (context.req.method === "OPTIONS") {
       context.header("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
       context.header("Access-Control-Allow-Headers", "Content-Type");
+      if (!originAllowed) return context.body(null, 403);
       return context.body(null, 204);
     }
-    if (isBrowserApiRoute && context.req.method === "POST" && origin && origin !== config.appOrigin) {
+    const config = readConfig(context.env);
+    if (context.req.method === "POST" && origin && origin !== config.appOrigin) {
       throw new AppError("FORBIDDEN", "Request origin is not allowed.", 403);
     }
     await next();
