@@ -104,10 +104,12 @@ If `LLM_MAX_TOKENS` is absent, no arbitrary application quota is created. Provid
 Create a dedicated Google OAuth 2.0 **Web application** client for me2write. Configure:
 
 - local redirect URI: `http://localhost:8787/auth/google/callback`
-- production redirect URI: `https://api.your-domain.example/auth/google/callback`
-- frontend origins as authorized JavaScript origins where Google requests them
+- current production redirect URI: `https://me2write-api-production.kimmanhcuong96.workers.dev/auth/google/callback`
+- if custom domains are introduced later, add that API callback URI before switching domains
 
-The flow uses authorization code + PKCE, signed/expiring state, an `HttpOnly` cookie, Google's stable `sub`, and opaque server-side sessions. Production cookies are `Secure` and `SameSite=Lax`. Do not reuse the me2talk client.
+The flow uses authorization code + PKCE, signed/expiring state, an `HttpOnly` cookie, Google's stable `sub`, and opaque server-side sessions. Because the current frontend (`write-checker.pages.dev`) and API (`workers.dev`) are cross-site, production cookies are `SameSite=None; Secure`; local HTTP cookies remain `SameSite=Lax`. Credentialed CORS allows only the exact `APP_ORIGIN`, and browser `POST` requests must carry that exact Origin. The frontend must keep `credentials: "include"` on API requests. This backend OAuth flow does not use or expose a `VITE_GOOGLE_CLIENT_ID`.
+
+`SameSite=None` permits cross-site cookie transport but cannot override a browser or extension that blocks third-party cookies entirely. Sibling custom domains such as `write.example.com` and `api.example.com` are the most robust production topology; after both are on the same site, tighten the production cookie policy back to `SameSite=Lax`.
 
 ## Neon
 
@@ -137,12 +139,27 @@ pnpm wrangler secret put AI_ACCOUNT_ID --env production
 pnpm wrangler secret put AI_API_TOKEN --env production
 ```
 
-Replace the example production origins/admin list in `wrangler.jsonc`, then validate and deploy:
+Configure these non-secret production variables in **Workers & Pages → me2write-api-production → Settings → Variables and Secrets** (use the exact values, without a trailing slash):
+
+```text
+ENVIRONMENT=production
+APP_ORIGIN=https://write-checker.pages.dev
+API_ORIGIN=https://me2write-api-production.kimmanhcuong96.workers.dev
+LLM_PROVIDER=cloudflare
+LLM_MODEL=@cf/meta/llama-3.3-70b-instruct-fp8-fast
+MAX_WRITING_WORDS=1000
+MAX_EVALUATIONS_PER_DAY=30
+ADMIN_EMAILS=comma-separated-admin-emails
+```
+
+Production deployment is connected directly to GitHub through Cloudflare Workers Builds. Before committing, validate locally:
 
 ```bash
 pnpm build
-pnpm deploy
+pnpm check
 ```
+
+Configure the production Worker build in Cloudflare with root directory `apps/api`, build command `pnpm build`, and deploy command `pnpm deploy`. A push to the configured production branch then builds and deploys automatically. The deploy script uses `--keep-vars`, so dashboard-managed variables are retained. `pnpm --filter @me2write/api deploy` remains available only as a manual recovery path.
 
 `wrangler.jsonc` uses the current compatibility date, `nodejs_compat`, generated binding types, and structured logs/traces. `/health` performs no database or AI work.
 
@@ -157,23 +174,24 @@ pnpm deploy
 2. Create a dedicated Google OAuth web client and register the production callback URL.
 3. In account B, create a Workers AI API token with Read and Edit permissions and copy its Account ID.
 4. Create/deploy the Worker in account A and set all production secrets, including `AI_ACCOUNT_ID` and `AI_API_TOKEN`, with `wrangler secret put`.
-5. Replace the example production origins and admin allowlist in `wrangler.jsonc`.
-6. Run `pnpm check` and `pnpm --filter @me2write/api deploy`.
-7. Create the Cloudflare Pages project from `apps/web`, set `VITE_API_ORIGIN`, build with `pnpm build`, and publish `dist`.
-8. Verify `GET https://api.your-domain.example/health`, Google login, one evaluation charged to account B, logout, and `/admin/llm-usage` with an allowlisted account.
+5. Set the production variables listed above in the Worker dashboard and verify both origins exactly match the deployed URLs.
+6. Run `pnpm check`, commit, push to GitHub, and confirm the Workers Builds check/deployment succeeds for the production branch.
+7. Connect the Cloudflare Pages project to the same GitHub repository, configure `apps/web`, `pnpm build`, and `dist`, then let the production-branch push publish it automatically.
+8. Verify `GET https://me2write-api-production.kimmanhcuong96.workers.dev/health`, Google login, `GET /api/me`, one evaluation charged to account B, logout, and `/admin/llm-usage` with an allowlisted account.
 
 Production secrets must never be placed in `vars`, source files, Pages client variables, or committed `.env` files. Only public frontend configuration such as `VITE_API_ORIGIN` belongs in Pages environment variables.
 
-## Pages deployment
+## Pages Git deployment
 
-Create a Cloudflare Pages project with:
+Connect the Cloudflare Pages project to the GitHub repository and configure:
 
+- production branch: the repository's production branch (normally `main`)
 - root directory: `apps/web`
 - build command: `pnpm build`
 - output directory: `dist`
-- environment variable: `VITE_API_ORIGIN=https://api.your-domain.example`
+- environment variable: `VITE_API_ORIGIN=https://me2write-api-production.kimmanhcuong96.workers.dev`
 
-The included `_redirects` supports direct navigation to `/admin/llm-usage`. Configure the API's `APP_ORIGIN` to the exact Pages/custom-domain origin; credentialed CORS intentionally does not use `*`.
+Every push to the configured production branch is built and published by Cloudflare; other enabled branches can receive preview deployments. The included `_redirects` supports direct navigation to `/admin/llm-usage`. Configure the API's `APP_ORIGIN` to `https://write-checker.pages.dev`; credentialed CORS intentionally does not use `*`. If either public URL changes, update `APP_ORIGIN`, `API_ORIGIN`, `VITE_API_ORIGIN`, and Google's authorized redirect URI as one deployment change.
 
 ## Change the model or add a provider
 

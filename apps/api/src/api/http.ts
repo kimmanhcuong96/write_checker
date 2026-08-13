@@ -7,9 +7,10 @@ import { AppError } from "../application/errors";
 import { EvaluateWritingService } from "../application/services/evaluate-writing";
 import { countWords, createWritingRequestSchema } from "../domain/writing/validation";
 import type { AuthenticatedUser } from "../domain/users/user";
+import { authCookieOptions } from "../infrastructure/auth/cookie-options";
 import { GoogleOAuthClient } from "../infrastructure/auth/google/google-oauth";
 import { randomToken, sha256, signValue, verifySignedValue } from "../infrastructure/auth/crypto";
-import { readConfig, type AppConfig } from "../infrastructure/config";
+import { readConfig } from "../infrastructure/config";
 import { NeonRepositories } from "../infrastructure/db/neon/neon-repositories";
 import { CloudflareWorkersAIProvider } from "../infrastructure/llm/cloudflare-workers-ai/provider";
 import type { RuntimeEnv } from "../infrastructure/runtime/cloudflare/bindings";
@@ -19,14 +20,6 @@ type AppContext = Context<{ Bindings: RuntimeEnv; Variables: AppVariables }>;
 const SESSION_COOKIE = "me2write_session";
 const OAUTH_STATE_COOKIE = "me2write_oauth_state";
 const OAUTH_VERIFIER_COOKIE = "me2write_oauth_verifier";
-
-const cookieOptions = (config: AppConfig, maxAge: number) => ({
-  httpOnly: true,
-  secure: config.environment === "production",
-  sameSite: "Lax" as const,
-  path: "/",
-  maxAge
-});
 
 const repositories = (context: AppContext) => new NeonRepositories(readConfig(context.env).databaseUrl);
 
@@ -82,7 +75,7 @@ export const createApp = () => {
       return context.body(null, 204);
     }
     const config = readConfig(context.env);
-    if (context.req.method === "POST" && origin && origin !== config.appOrigin) {
+    if (context.req.method === "POST" && origin !== config.appOrigin) {
       throw new AppError("FORBIDDEN", "Request origin is not allowed.", 403);
     }
     await next();
@@ -97,8 +90,8 @@ export const createApp = () => {
     const verifier = randomToken(48);
     const state = await signValue(JSON.stringify({ nonce: randomToken(), expiresAt: Date.now() + 10 * 60_000 }), config.sessionSecret);
     const challenge = await sha256(verifier);
-    setCookie(context, OAUTH_STATE_COOKIE, state, cookieOptions(config, 600));
-    setCookie(context, OAUTH_VERIFIER_COOKIE, verifier, cookieOptions(config, 600));
+    setCookie(context, OAUTH_STATE_COOKIE, state, authCookieOptions(config, 600));
+    setCookie(context, OAUTH_VERIFIER_COOKIE, verifier, authCookieOptions(config, 600));
     const google = new GoogleOAuthClient(config.googleClientId, config.googleClientSecret, `${config.apiOrigin}/auth/google/callback`);
     return context.redirect(google.authorizationUrl(state, challenge));
   });
@@ -131,7 +124,7 @@ export const createApp = () => {
     const sessionToken = randomToken(48);
     const sessionSeconds = 60 * 60 * 24 * 30;
     await db.create(user.id, await sha256(sessionToken), new Date(Date.now() + sessionSeconds * 1000));
-    setCookie(context, SESSION_COOKIE, sessionToken, cookieOptions(config, sessionSeconds));
+    setCookie(context, SESSION_COOKIE, sessionToken, authCookieOptions(config, sessionSeconds));
     return context.redirect(config.appOrigin);
   });
 

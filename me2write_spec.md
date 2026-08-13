@@ -120,7 +120,7 @@ Requirements:
 - Secure cookies.
 - `HttpOnly`.
 - `Secure` in production.
-- Appropriate `SameSite`.
+- `SameSite=None; Secure` in the current cross-site `pages.dev` → `workers.dev` production topology, and `SameSite=Lax` for local HTTP development. If production moves to sibling custom domains on the same site, tighten the production cookie back to `SameSite=Lax`.
 - Session expiration.
 - Logout support.
 - OAuth `state` validation.
@@ -1603,7 +1603,7 @@ The following MVP capabilities are implemented in the current repository:
 - Server-side word/body validation, atomic `request_id` duplicate protection, optional token quota, and configurable per-user rolling 24-hour evaluation limit.
 - Evaluation result UI for level, seven scores, strengths, problems, corrections, improvement plan, loading states, and controlled errors.
 - Backend-protected admin usage dashboard grouped by day, week, month, year, provider, and model.
-- Narrow credentialed CORS, origin checks, server-side admin authorization, structured errors/logging, and no automatic paid-provider fallback.
+- Narrow credentialed CORS, exact required Origin checks for state-changing browser requests, environment-aware cross-site session cookies, server-side admin authorization, structured errors/logging, and no automatic paid-provider fallback.
 - Minimal high-value tests for validation, provider-result schema, idempotency, token quota, and rate limiting.
 
 Deployment credentials and external resources (Google OAuth client, Neon database, Worker account A, Workers AI account B/token, Pages project, and production domains) remain operator configuration; they are not committed to this repository.
@@ -1621,5 +1621,16 @@ Deployment credentials and external resources (Google OAuth client, Neon databas
 - Replaced the account-local Workers AI binding with the authenticated REST API adapter.
 - Added account B's `AI_ACCOUNT_ID` and `AI_API_TOKEN` as required Worker secrets in account A.
 - Added validation and tests for Cloudflare API envelopes, Bearer authentication, structured output, and quota failures.
+
+### 2026-08-13 — Cross-site OAuth session transport
+
+- Set production authentication cookies to `SameSite=None; Secure` so credentialed requests can carry the session from the `pages.dev` frontend to the `workers.dev` API; local HTTP development remains `SameSite=Lax`.
+- Required the configured frontend Origin on browser state-changing requests as the CSRF boundary accompanying cross-site cookies.
+- Documented the exact current production origins, the browser third-party-cookie limitation, and sibling custom domains as the robust long-term topology.
+
+### 2026-08-13 — Git-integrated Cloudflare deployments
+
+- Documented Cloudflare Workers Builds and Pages Git integration as the production deployment path: validated commits pushed to the configured production branch automatically build and deploy both applications.
+- Retained Wrangler deployment only as a manual recovery path; production runtime variables and secrets remain dashboard-managed.
 
 Future changes must add a new dated entry instead of rewriting this history.
