@@ -1,6 +1,6 @@
 # me2write
 
-me2write is a standalone English writing checker. It estimates CEFR level A1–C2, scores seven writing dimensions, and returns concise strengths, priorities, corrections, and a next-level improvement plan.
+me2write is a standalone, multilingual English writing coach. It can estimate the writer's current CEFR level or verify a selected A1–C2 target, score seven writing dimensions, and return actionable sentence and vocabulary alternatives. The interface and AI explanations support English, Vietnamese, Simplified Chinese, and Japanese.
 
 The MVP is deliberately independent from me2talk: separate authentication, database tables, deployment, Workers AI usage, and configuration. The products only link to one another in the UI.
 
@@ -41,6 +41,7 @@ apps/api/
   src/infrastructure/      Google OAuth, Neon, Workers AI, config
   src/api/                 Hono routes and middleware
 apps/web/                  React/Vite Pages frontend
+  src/i18n.ts              Typed four-language catalog and locale resolution
 ```
 
 ## Local setup
@@ -60,9 +61,7 @@ Apply committed migrations with the repeatable runner:
 DATABASE_URL="postgresql://..." pnpm --filter @me2write/api db:migrate
 ```
 
-The initial MVP currently has one migration only: `apps/api/migrations/0001_initial.sql`. The runner creates `schema_migrations`, applies that init once, and records its version in a transaction. Future schema changes can be added as later numbered migrations without changing this initial file. Neon SQL Editor/`psql` can still be used for an emergency manual apply.
-
-The database starts from one complete, idempotent init migration. Once production exists, treat this file as immutable and add later numbered migrations for changes.
+The pre-v1 application intentionally has one complete idempotent migration: `apps/api/migrations/0001_initial.sql`. It creates users, sessions, evaluation/usage data, block state, and immutable admin-action audit records. Because an earlier preview may already have recorded version `0001_initial`, the runner re-executes this particular idempotent init to reconcile missing pre-v1 columns and constraints. No second migration is required for the first production release. After the first production release, freeze `0001` and use later numbered migrations for all changes.
 
 Start both applications:
 
@@ -95,6 +94,7 @@ Workers AI is called through Cloudflare's REST API during local development and 
 | `MAX_EVALUATIONS_PER_DAY` | no | no | Per-user rolling 24-hour abuse limit; default is 30 |
 | `LLM_MAX_TOKENS` | no | no | Optional global ceiling based on recorded successful total tokens |
 | `ADMIN_EMAILS` | no | no | Comma-separated Google emails allowed to query admin usage |
+| `ADMIN_TIME_ZONE` | no | no | IANA time zone for admin calendar periods; defaults to `Asia/Ho_Chi_Minh` |
 | `VITE_API_ORIGIN` | no | yes | Public API origin compiled into the frontend |
 
 If `LLM_MAX_TOKENS` is absent, no arbitrary application quota is created. Provider quota errors are returned as controlled failures and never trigger another paid provider.
@@ -113,9 +113,24 @@ The flow uses authorization code + PKCE, signed/expiring state, an `HttpOnly` co
 
 ## Neon
 
-Create a separate Neon project/database or, at minimum, a dedicated database/schema and credentials for me2write. The API uses parameterized PostgreSQL queries through `@neondatabase/serverless`. Tables are `users`, `sessions`, `writing_evaluations`, and `llm_usage`.
+Create a separate Neon project/database or, at minimum, a dedicated database/schema and credentials for me2write. The API uses parameterized PostgreSQL queries through `@neondatabase/serverless`. Tables are `users`, `sessions`, `writing_evaluations`, `llm_usage`, and `admin_user_actions`.
 
-The evaluation claim is atomic and `request_id` is unique. A browser retry can return the already-completed result without paying for another inference. Processing and failed duplicate requests return controlled conflicts.
+The evaluation claim is atomic and `request_id` is unique. A browser retry can return the already-completed result without paying for another inference. Processing and failed duplicate requests return controlled conflicts. The schema also records evaluation mode, requested target level, feedback language, per-user suspension state, and an append-only admin action trail.
+
+## Product modes and localization
+
+- **Estimate current level** independently evaluates the writing and returns the original CEFR report.
+- **Verify target level** requires A1–C2 and additionally returns pass/gap verdicts, target-specific gaps, sentence assessments, and vocabulary alternatives.
+- The first browser visit uses the first supported language in `navigator.languages`; `en`, `vi`, `zh`, and `ja` regional variants are normalized to their base language. Unsupported locales fall back to English. A manual selection is saved in local storage.
+- The selected interface language is sent as `feedbackLanguage`, so AI explanations match the UI while quoted/replacement English stays intact.
+
+## Administration
+
+Allowlisted users open `/admin`. Authorization is rechecked on every backend admin endpoint via `ADMIN_EMAILS`; frontend state is never trusted. The overview reports request outcomes and tokens by period/provider/model. Server-side paginated user search reports evaluation counts for today/week/month/all time, token usage, last activity, and access status without loading the entire user base into one Worker request.
+
+Admins can suspend a user for a bounded number of days, block them permanently, or restore access. Blocking is enforced immediately before evaluation, never deletes historical data, requires a reason, prevents self-blocking, and records actor/target/action/duration/reason in `admin_user_actions`. The database prevents audit records from being cascade-deleted with their target and independently validates action/duration/reason consistency.
+
+Calendar periods use `ADMIN_TIME_ZONE`, not the database session time zone. When the variable is absent, the backend defaults to `Asia/Ho_Chi_Minh`; set another valid IANA value only when reporting should follow a different region. The active value is shown in the admin UI.
 
 ## Cross-account Workers AI and API deployment
 
@@ -123,7 +138,7 @@ The Worker runs in Cloudflare account A and calls the Workers AI REST endpoint f
 
 If an evaluation returns `PROVIDER_UNAVAILABLE`, open the production Worker logs and filter for `workers_ai_request_failed`. The event includes only safe diagnostics (`reason`, upstream HTTP status, Cloudflare Ray ID, and Cloudflare error codes/messages); it never includes the API token, account ID, prompt, or submitted writing. An immediate `401`/`403` usually means `AI_ACCOUNT_ID` and `AI_API_TOKEN` do not belong to the same account, the token is invalid, or its account-B scope lacks both Workers AI Read and Edit. A `404` usually indicates an incorrect account/model path, while `429` indicates quota/rate limiting.
 
-A `network_error` with `TypeError` means no upstream HTTP response was received. Check `networkErrorKind`: `invalid_receiver` means a Workers Web API lost its required `this` receiver; `invalid_header` usually means the dashboard secret contains whitespace/newlines or the value incorrectly includes the `Bearer ` prefix; `invalid_url` means the account/model endpoint is malformed; `subrequest_failed` means the Worker could not complete the outbound fetch. Runtime config trims surrounding whitespace, validates account IDs as 32 hexadecimal characters, and rejects whitespace inside API tokens. The REST adapter deliberately invokes the platform global as a direct `fetch()` call instead of storing and calling it as an object method.
+A `network_error` with `TypeError` means no upstream HTTP response was received. Check `networkErrorKind`: `invalid_receiver` means a Workers Web API lost its required `this` receiver; `invalid_header` usually means the dashboard secret contains whitespace/newlines or the value incorrectly includes the `Bearer ` prefix; `invalid_url` means the account/model endpoint is malformed; `subrequest_failed` means the Worker could not complete the outbound fetch. Runtime config trims surrounding whitespace, validates account IDs as 32 hexadecimal characters, and rejects whitespace inside API tokens. The REST adapter deliberately invokes the platform global as a direct `fetch()` call instead of storing and calling it as an object method. Outbound Workers AI requests time out after 55 seconds, Google OAuth calls after 15 seconds, and each Neon HTTP query after 15 seconds. The browser uses a 70-second evaluation deadline and a 20-second deadline for other API calls; cancellation signals abort obsolete admin searches rather than allowing stale results to overwrite current data.
 
 If there is no `workers_ai_request_failed` event, filter for `evaluation_pipeline_failed`. Its `stage` distinguishes `token_quota_check`, `daily_limit_check`, `provider_evaluation`, `result_persistence`, and `failure_persistence`. Database or persistence failures return `INTERNAL_ERROR` rather than being mislabeled as provider outages.
 
@@ -156,6 +171,7 @@ LLM_MODEL=@cf/meta/llama-3.3-70b-instruct-fp8-fast
 MAX_WRITING_WORDS=1000
 MAX_EVALUATIONS_PER_DAY=30
 ADMIN_EMAILS=comma-separated-admin-emails
+ADMIN_TIME_ZONE=Asia/Ho_Chi_Minh
 ```
 
 Production deployment is connected directly to GitHub through Cloudflare Workers Builds. Before committing, validate locally:
@@ -171,7 +187,7 @@ Configure the production Worker build in Cloudflare with root directory `apps/ap
 
 ### Production deployment checklist
 
-1. Create the dedicated Neon database and run the initial migration:
+1. Create the dedicated Neon database and run/reconcile the initial migration **before pushing the application commit**:
 
    ```bash
    DATABASE_URL="postgresql://..." pnpm --filter @me2write/api db:migrate
@@ -183,7 +199,9 @@ Configure the production Worker build in Cloudflare with root directory `apps/ap
 5. Set the production variables listed above in the Worker dashboard and verify both origins exactly match the deployed URLs.
 6. Run `pnpm check`, commit, push to GitHub, and confirm the Workers Builds check/deployment succeeds for the production branch.
 7. Connect the Cloudflare Pages project to the same GitHub repository, configure `apps/web`, `pnpm build`, and `dist`, then let the production-branch push publish it automatically.
-8. Verify `GET https://me2write-api-production.kimmanhcuong96.workers.dev/health`, Google login, `GET /api/me`, one evaluation charged to account B, logout, and `/admin/llm-usage` with an allowlisted account.
+8. Verify `GET https://me2write-api-production.kimmanhcuong96.workers.dev/health`, Google login, `GET /api/me`, both evaluation modes, all four languages, logout, and `/admin` with an allowlisted account.
+
+Schema changes are backward-compatible with the previous preview Worker, so applying the migration before the GitHub push avoids a window where the newly deployed Worker queries columns that do not exist yet. Cloudflare's Git build does not run the Neon migration automatically unless you explicitly build a separate secret-managed migration job.
 
 Production secrets must never be placed in `vars`, source files, Pages client variables, or committed `.env` files. Only public frontend configuration such as `VITE_API_ORIGIN` belongs in Pages environment variables.
 
@@ -197,7 +215,7 @@ Connect the Cloudflare Pages project to the GitHub repository and configure:
 - output directory: `dist`
 - environment variable: `VITE_API_ORIGIN=https://me2write-api-production.kimmanhcuong96.workers.dev`
 
-Every push to the configured production branch is built and published by Cloudflare; other enabled branches can receive preview deployments. The included `_redirects` supports direct navigation to `/admin/llm-usage`. Configure the API's `APP_ORIGIN` to `https://write-checker.pages.dev`; credentialed CORS intentionally does not use `*`. If either public URL changes, update `APP_ORIGIN`, `API_ORIGIN`, `VITE_API_ORIGIN`, and Google's authorized redirect URI as one deployment change.
+Every push to the configured production branch is built and published by Cloudflare; other enabled branches can receive preview deployments. The included `_redirects` supports direct navigation to `/admin`. Configure the API's `APP_ORIGIN` to `https://write-checker.pages.dev`; credentialed CORS intentionally does not use `*`. If either public URL changes, update `APP_ORIGIN`, `API_ORIGIN`, `VITE_API_ORIGIN`, and Google's authorized redirect URI as one deployment change.
 
 ## Change the model or add a provider
 
@@ -248,3 +266,4 @@ Logs never include cookies, authorization headers, session/API tokens, database 
 - Quota enforcement uses recorded total tokens and may allow one in-flight request beyond the ceiling under concurrency; provider quota remains the hard stop.
 - No writing history/progress UI, subscriptions, provider fallback, classroom features, or shared me2talk SSO.
 - Admin authorization is a server-side email allowlist rather than full RBAC.
+- The admin user table supports server-side pagination and search but not CSV export.

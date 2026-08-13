@@ -36,9 +36,31 @@ const responseSchema = {
         required: ["original", "better", "explanation"]
       }
     },
-    improvementPlan: { type: "array", maxItems: 6, items: { type: "string" } }
+    improvementPlan: { type: "array", maxItems: 6, items: { type: "string" } },
+    targetAssessment: {
+      anyOf: [
+        { type: "null" },
+        {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            targetLevel: { type: "string", enum: ["A1", "A2", "B1", "B2", "C1", "C2"] },
+            meetsTarget: { type: "boolean" },
+            verdict: { type: "string" },
+            gapSummary: { type: "array", maxItems: 6, items: { type: "string" } },
+            sentenceUpgrades: { type: "array", maxItems: 8, items: { type: "object", additionalProperties: false, properties: {
+              original: { type: "string" }, assessment: { type: "string" }, alternatives: { type: "array", minItems: 1, maxItems: 3, items: { type: "string" } }
+            }, required: ["original", "assessment", "alternatives"] } },
+            vocabularyUpgrades: { type: "array", maxItems: 8, items: { type: "object", additionalProperties: false, properties: {
+              original: { type: "string" }, alternatives: { type: "array", minItems: 1, maxItems: 4, items: { type: "string" } }, reason: { type: "string" }
+            }, required: ["original", "alternatives", "reason"] } }
+          },
+          required: ["targetLevel", "meetsTarget", "verdict", "gapSummary", "sentenceUpgrades", "vocabularyUpgrades"]
+        }
+      ]
+    }
   },
-  required: ["level", "levelReason", "scores", "strengths", "problems", "corrections", "improvementPlan"]
+  required: ["level", "levelReason", "scores", "strengths", "problems", "corrections", "improvementPlan", "targetAssessment"]
 } as const;
 
 const AiResponseSchema = z.object({
@@ -69,6 +91,7 @@ const CloudflareApiEnvelopeSchema = z.object({
 
 const CLOUDFLARE_API_ORIGIN = "https://api.cloudflare.com";
 const WORKERS_AI_RATE_LIMIT_ERROR = 7505;
+const WORKERS_AI_TIMEOUT_MS = 55_000;
 
 const logProviderFailure = (details: {
   reason: "network_error" | "http_error" | "invalid_envelope" | "invalid_json";
@@ -121,11 +144,12 @@ export class CloudflareWorkersAIProvider implements LLMProvider {
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          messages: buildEvaluationMessages(input.text),
+          messages: buildEvaluationMessages(input),
           temperature: 0.2,
-          max_tokens: 1400,
+          max_tokens: input.mode === "targeted" ? 2000 : 1400,
           response_format: { type: "json_schema", json_schema: responseSchema }
-        })
+        }),
+        signal: AbortSignal.timeout(WORKERS_AI_TIMEOUT_MS)
       });
     } catch (error) {
       logProviderFailure({
@@ -186,6 +210,13 @@ export class CloudflareWorkersAIProvider implements LLMProvider {
     const result = WritingEvaluationResultSchema.safeParse(candidate);
     if (!result.success) {
       throw new AppError("INVALID_PROVIDER_OUTPUT", "The evaluator returned feedback in an invalid format.", 502, result.error);
+    }
+    const targetMismatch =
+      (input.mode === "estimate" && result.data.targetAssessment !== null) ||
+      (input.mode === "targeted" &&
+        (result.data.targetAssessment === null || result.data.targetAssessment.targetLevel !== input.targetLevel));
+    if (targetMismatch) {
+      throw new AppError("INVALID_PROVIDER_OUTPUT", "The evaluator returned feedback for the wrong evaluation mode.", 502);
     }
     const usage = envelope.data.usage;
     return {

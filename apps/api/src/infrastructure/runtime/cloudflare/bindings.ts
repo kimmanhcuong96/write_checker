@@ -8,6 +8,7 @@ export type RuntimeEnv = Env & {
   MAX_WRITING_WORDS: string;
   MAX_EVALUATIONS_PER_DAY: string;
   ADMIN_EMAILS: string;
+  ADMIN_TIME_ZONE?: string;
   DATABASE_URL: string;
   GOOGLE_CLIENT_ID: string;
   GOOGLE_CLIENT_SECRET: string;

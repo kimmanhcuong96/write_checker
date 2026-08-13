@@ -9,7 +9,10 @@ export class RequestError extends Error {
 }
 
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${API_ORIGIN}${path}`, { ...init, credentials: "include", headers: { "content-type": "application/json", ...init?.headers } });
+  const timeoutMs = path === "/api/evaluations" && init?.method === "POST" ? 70_000 : 20_000;
+  const timeoutSignal = AbortSignal.timeout(timeoutMs);
+  const signal = init?.signal ? AbortSignal.any([init.signal, timeoutSignal]) : timeoutSignal;
+  const response = await fetch(`${API_ORIGIN}${path}`, { ...init, signal, credentials: "include", headers: { "content-type": "application/json", ...init?.headers } });
   const payload: unknown = await response.json();
   if (!response.ok) {
     const candidate = payload as Partial<ApiError>;

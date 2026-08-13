@@ -1,7 +1,7 @@
-import type { WritingEvaluationResult } from "../../domain/cefr/evaluation";
+import type { CefrLevel, EvaluationMode, FeedbackLocale, WritingEvaluationResult } from "../../domain/cefr/evaluation";
 import type { LlmUsage } from "../../domain/usage/usage";
 
-export type WritingEvaluationInput = { text: string; wordCount: number };
+export type WritingEvaluationInput = { text: string; wordCount: number; mode: EvaluationMode; targetLevel: CefrLevel | null; feedbackLanguage: FeedbackLocale };
 
 export type ProviderEvaluation = {
   result: WritingEvaluationResult;

@@ -1,40 +1,35 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { readConfig } from "../src/infrastructure/config";
 import type { RuntimeEnv } from "../src/infrastructure/runtime/cloudflare/bindings";
 
-const baseEnv = {
+const environment = (overrides: Partial<RuntimeEnv> = {}): RuntimeEnv => ({
   ENVIRONMENT: "production",
-  APP_ORIGIN: "https://write-checker.pages.dev",
-  API_ORIGIN: "https://api.example.test",
-  DATABASE_URL: "postgresql://example.test/database",
-  GOOGLE_CLIENT_ID: "google-client",
-  GOOGLE_CLIENT_SECRET: "google-secret",
-  SESSION_SECRET: "12345678901234567890123456789012",
+  APP_ORIGIN: "https://app.example.com",
+  API_ORIGIN: "https://api.example.com",
+  DATABASE_URL: "postgres://example",
+  GOOGLE_CLIENT_ID: "client",
+  GOOGLE_CLIENT_SECRET: "secret",
+  SESSION_SECRET: "x".repeat(64),
   LLM_PROVIDER: "cloudflare",
-  LLM_MODEL: "@cf/meta/test-model",
-  AI_ACCOUNT_ID: "0123456789abcdef0123456789abcdef",
-  AI_API_TOKEN: "workers-ai-token",
+  LLM_MODEL: "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+  AI_ACCOUNT_ID: "a".repeat(32),
+  AI_API_TOKEN: "token",
   MAX_WRITING_WORDS: "1000",
   MAX_EVALUATIONS_PER_DAY: "30",
-  ADMIN_EMAILS: ""
-} satisfies RuntimeEnv;
+  ADMIN_EMAILS: "admin@example.com",
+  ...overrides
+});
 
-describe("Workers AI runtime credentials", () => {
-  it("trims accidental surrounding whitespace from dashboard secrets", () => {
-    const config = readConfig({
-      ...baseEnv,
-      AI_ACCOUNT_ID: `  ${baseEnv.AI_ACCOUNT_ID}\n`,
-      AI_API_TOKEN: `\n${baseEnv.AI_API_TOKEN}  `
-    });
-
-    expect(config.aiAccountId).toBe(baseEnv.AI_ACCOUNT_ID);
-    expect(config.aiApiToken).toBe(baseEnv.AI_API_TOKEN);
+describe("runtime configuration", () => {
+  it("defaults administrative reporting to Vietnam time", () => {
+    expect(readConfig(environment()).adminTimeZone).toBe("Asia/Ho_Chi_Minh");
   });
 
-  it("rejects malformed account IDs and whitespace inside bearer tokens", () => {
-    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
-    expect(() => readConfig({ ...baseEnv, AI_ACCOUNT_ID: "not-an-account" })).toThrow("Invalid runtime configuration");
-    expect(() => readConfig({ ...baseEnv, AI_API_TOKEN: "Bearer token-value" })).toThrow("Invalid runtime configuration");
-    consoleError.mockRestore();
+  it("accepts an explicit IANA reporting time zone", () => {
+    expect(readConfig(environment({ ADMIN_TIME_ZONE: "Asia/Ho_Chi_Minh" })).adminTimeZone).toBe("Asia/Ho_Chi_Minh");
+  });
+
+  it("rejects an invalid reporting time zone", () => {
+    expect(() => readConfig(environment({ ADMIN_TIME_ZONE: "GMT+7-invalid" }))).toThrow("Invalid runtime configuration");
   });
 });

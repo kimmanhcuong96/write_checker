@@ -69,6 +69,19 @@ const requireAdmin: MiddlewareHandler<{ Bindings: RuntimeEnv; Variables: AppVari
   await next();
 };
 
+const requireActiveUser: MiddlewareHandler<{ Bindings: RuntimeEnv; Variables: AppVariables }> = async (context, next) => {
+  const user = context.get("user");
+  const temporarilyBlocked = Boolean(user.blockedUntil && new Date(user.blockedUntil).getTime() > Date.now());
+  if (user.permanentlyBlocked || temporarilyBlocked) {
+    throw new AppError(
+      "USER_BLOCKED",
+      user.permanentlyBlocked ? "This account has been blocked from using evaluations." : `This account is suspended until ${user.blockedUntil}.`,
+      403
+    );
+  }
+  await next();
+};
+
 const evaluationResponse = (record: { id: string; status: string; result: unknown }) => ({
   id: record.id,
   status: record.status,
@@ -186,10 +199,14 @@ export const createApp = () => {
 
   app.get("/api/me", requireAuth, (context) => {
     const user = context.get("user");
-    return context.json({ user: { ...user, isAdmin: Boolean(user.email && readConfig(context.env).adminEmails.has(user.email.toLowerCase())) } });
+    return context.json({ user: {
+      ...user,
+      isBlocked: user.permanentlyBlocked || Boolean(user.blockedUntil && new Date(user.blockedUntil).getTime() > Date.now()),
+      isAdmin: Boolean(user.email && readConfig(context.env).adminEmails.has(user.email.toLowerCase()))
+    } });
   });
 
-  app.post("/api/evaluations", requireAuth, async (context) => {
+  app.post("/api/evaluations", requireAuth, requireActiveUser, async (context) => {
     const startedAt = Date.now();
     const config = readConfig(context.env);
     let body: unknown;
@@ -216,7 +233,10 @@ export const createApp = () => {
         requestId: parsed.data.requestId,
         userId: user.id,
         text: parsed.data.text,
-        wordCount: countWords(parsed.data.text)
+        wordCount: countWords(parsed.data.text),
+        mode: parsed.data.mode,
+        targetLevel: parsed.data.targetLevel ?? null,
+        feedbackLanguage: parsed.data.feedbackLanguage
       });
       console.log(JSON.stringify({ event: "evaluation_completed", httpRequestId: context.get("httpRequestId"), evaluationRequestId: parsed.data.requestId, evaluationId: result.id, userId: user.id, provider: config.llmProvider, model: config.llmModel, latencyMs: Date.now() - startedAt }));
       return context.json(evaluationResponse(result), result.status === "completed" ? 200 : 202);
@@ -233,7 +253,44 @@ export const createApp = () => {
   });
 
   app.get("/api/admin/llm-usage", requireAuth, requireAdmin, async (context) => {
-    return context.json(await repositories(context).usageDashboard());
+    const config = readConfig(context.env);
+    return context.json(await repositories(context).usageDashboard(config.adminTimeZone));
+  });
+
+  app.get("/api/admin/dashboard", requireAuth, requireAdmin, async (context) => {
+    const query = z.object({
+      page: z.coerce.number().int().min(1).default(1),
+      pageSize: z.coerce.number().int().min(1).max(100).default(50),
+      search: z.string().trim().max(120).default("")
+    }).safeParse(context.req.query());
+    if (!query.success) throw new AppError("INVALID_INPUT", "Invalid admin dashboard query.", 400);
+    const config = readConfig(context.env);
+    return context.json(await repositories(context).adminDashboard({ ...query.data, timeZone: config.adminTimeZone }));
+  });
+
+  app.post("/api/admin/users/:id/suspension", requireAuth, requireAdmin, async (context) => {
+    const user = context.get("user");
+    const targetUserId = z.uuid().safeParse(context.req.param("id"));
+    const body = z.discriminatedUnion("kind", [
+      z.object({ kind: z.literal("none"), reason: z.string().trim().max(500).nullish() }),
+      z.object({ kind: z.literal("permanent"), reason: z.string().trim().min(1).max(500) }),
+      z.object({ kind: z.literal("days"), days: z.number().int().min(1).max(3650), reason: z.string().trim().min(1).max(500) })
+    ]).safeParse(await context.req.json().catch(() => null));
+    if (!targetUserId.success || !body.success) throw new AppError("INVALID_INPUT", "Invalid suspension request.", 400);
+    if (targetUserId.data === user.id) throw new AppError("FORBIDDEN", "Administrators cannot block their own account.", 403);
+    const updated = await repositories(context).setUserSuspension({
+      actorUserId: user.id,
+      targetUserId: targetUserId.data,
+      kind: body.data.kind,
+      days: body.data.kind === "days" ? body.data.days : null,
+      reason: body.data.reason ?? null
+    });
+    if (!updated) throw new AppError("NOT_FOUND", "User not found.", 404);
+    console.log(JSON.stringify({
+      event: "admin_user_suspension_changed", httpRequestId: context.get("httpRequestId"), actorUserId: user.id,
+      targetUserId: targetUserId.data, kind: body.data.kind, days: body.data.kind === "days" ? body.data.days : null
+    }));
+    return context.json({ ok: true });
   });
 
   app.notFound((context) => context.json(errorPayload(context.get("httpRequestId"), "NOT_FOUND", "Route not found."), 404));

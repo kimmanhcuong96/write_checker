@@ -11,7 +11,8 @@ const result: WritingEvaluationResult = {
   strengths: ["The main message is clear."],
   problems: ["Sentence patterns are repetitive."],
   corrections: [],
-  improvementPlan: ["Vary sentence openings."]
+  improvementPlan: ["Vary sentence openings."],
+  targetAssessment: null
 };
 
 const record = (status: EvaluationRecord["status"], evaluation: WritingEvaluationResult | null): EvaluationRecord => ({
@@ -25,10 +26,17 @@ function repository(claim: EvaluationRepository["claim"]): EvaluationRepository 
     complete: vi.fn(() => Promise.resolve()),
     fail: vi.fn(() => Promise.resolve()),
     consumedTokens: vi.fn(() => Promise.resolve(0)),
-    usageDashboard: vi.fn(() => Promise.resolve({ summaries: [], breakdown: [] }))
-    ,countEvaluationsSince: vi.fn(() => Promise.resolve(0))
+    usageDashboard: vi.fn(() => Promise.resolve({ summaries: [], breakdown: [] })),
+    adminDashboard: vi.fn(() => Promise.resolve({ reportTimeZone: "UTC", summaries: [], breakdown: [], users: [], userPage: { page: 1, pageSize: 50, total: 0 } })),
+    setUserSuspension: vi.fn(() => Promise.resolve(true)),
+    countEvaluationsSince: vi.fn(() => Promise.resolve(0))
   };
 }
+
+const executionInput = (item: EvaluationRecord) => ({
+  requestId: item.requestId, userId: item.userId, text: "New text", wordCount: 2,
+  mode: "estimate" as const, targetLevel: null, feedbackLanguage: "en" as const
+});
 
 function provider(evaluateWriting: LLMProvider["evaluateWriting"]): LLMProvider {
   return {
@@ -44,7 +52,7 @@ describe("EvaluateWritingService cost protection", () => {
     const evaluate = vi.fn(() => Promise.resolve({ result, usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2, providerUsageValue: null, providerUsageUnit: null } }));
     const llm = provider(evaluate);
     const service = new EvaluateWritingService(repository(vi.fn(() => Promise.resolve({ record: existing, created: false }))), llm, null, 30);
-    const response = await service.execute({ requestId: existing.requestId, userId: existing.userId, text: "Existing text", wordCount: 2 });
+    const response = await service.execute(executionInput(existing));
     expect(response).toEqual(existing);
     expect(evaluate).not.toHaveBeenCalled();
   });
@@ -58,7 +66,7 @@ describe("EvaluateWritingService cost protection", () => {
     const evaluate = vi.fn(() => Promise.resolve({ result, usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2, providerUsageValue: null, providerUsageUnit: null } }));
     const llm = provider(evaluate);
     const service = new EvaluateWritingService(db, llm, 100, 30);
-    await expect(service.execute({ requestId: fresh.requestId, userId: fresh.userId, text: "New text", wordCount: 2 })).rejects.toMatchObject({ code: "AI_QUOTA_UNAVAILABLE" });
+    await expect(service.execute(executionInput(fresh))).rejects.toMatchObject({ code: "AI_QUOTA_UNAVAILABLE" });
     expect(evaluate).not.toHaveBeenCalled();
     expect(fail).toHaveBeenCalledOnce();
   });
@@ -70,7 +78,7 @@ describe("EvaluateWritingService cost protection", () => {
     const evaluate = vi.fn(() => Promise.resolve({ result, usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2, providerUsageValue: null, providerUsageUnit: null } }));
     const llm = provider(evaluate);
     const service = new EvaluateWritingService(db, llm, null, 30);
-    await expect(service.execute({ requestId: fresh.requestId, userId: fresh.userId, text: "New text", wordCount: 2 })).rejects.toMatchObject({ code: "RATE_LIMITED" });
+    await expect(service.execute(executionInput(fresh))).rejects.toMatchObject({ code: "RATE_LIMITED" });
     expect(evaluate).not.toHaveBeenCalled();
   });
 
@@ -83,7 +91,7 @@ describe("EvaluateWritingService cost protection", () => {
     const service = new EvaluateWritingService(db, provider(evaluate), null, 30);
 
     await expect(
-      service.execute({ requestId: fresh.requestId, userId: fresh.userId, text: "New text", wordCount: 2 })
+      service.execute(executionInput(fresh))
     ).rejects.toMatchObject({ code: "INTERNAL_ERROR", status: 500 });
     expect(evaluate).not.toHaveBeenCalled();
     expect(consoleError).toHaveBeenCalledWith(

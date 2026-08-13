@@ -16,8 +16,11 @@ const evaluation = {
   strengths: ["The main message is clear."],
   problems: ["Sentence patterns are repetitive."],
   corrections: [],
-  improvementPlan: ["Vary sentence openings."]
+  improvementPlan: ["Vary sentence openings."],
+  targetAssessment: null
 };
+
+const writingInput = { text: "This is my writing.", wordCount: 4, mode: "estimate" as const, targetLevel: null, feedbackLanguage: "en" as const };
 
 describe("CloudflareWorkersAIProvider REST adapter", () => {
   it("calls Workers AI in another account with a bearer token", async () => {
@@ -41,7 +44,7 @@ describe("CloudflareWorkersAIProvider REST adapter", () => {
       fetcher
     );
 
-    const result = await provider.evaluateWriting({ text: "This is my writing.", wordCount: 4 });
+    const result = await provider.evaluateWriting(writingInput);
 
     expect(result.result).toEqual(evaluation);
     expect(result.usage.totalTokens).toBe(30);
@@ -75,7 +78,7 @@ describe("CloudflareWorkersAIProvider REST adapter", () => {
     );
     const provider = new CloudflareWorkersAIProvider("account-b", "secret-token", "@cf/meta/model", fetcher);
 
-    await expect(provider.evaluateWriting({ text: "This is my writing.", wordCount: 4 })).rejects.toMatchObject({
+    await expect(provider.evaluateWriting(writingInput)).rejects.toMatchObject({
       code: "AI_QUOTA_UNAVAILABLE",
       status: 503
     });
@@ -103,7 +106,7 @@ describe("CloudflareWorkersAIProvider REST adapter", () => {
     );
     const provider = new CloudflareWorkersAIProvider("account-b", "secret-token", "@cf/meta/model", fetcher);
 
-    await expect(provider.evaluateWriting({ text: "This is my writing.", wordCount: 4 })).rejects.toMatchObject({
+    await expect(provider.evaluateWriting(writingInput)).rejects.toMatchObject({
       code: "PROVIDER_UNAVAILABLE",
       status: 503
     });
@@ -125,7 +128,7 @@ describe("CloudflareWorkersAIProvider REST adapter", () => {
     const fetcher = vi.fn<typeof fetch>(() => Promise.reject(new TypeError("Invalid character in header value")));
     const provider = new CloudflareWorkersAIProvider("account-b", "secret-token", "@cf/meta/model", fetcher);
 
-    await expect(provider.evaluateWriting({ text: "This is my writing.", wordCount: 4 })).rejects.toMatchObject({
+    await expect(provider.evaluateWriting(writingInput)).rejects.toMatchObject({
       code: "PROVIDER_UNAVAILABLE",
       status: 503
     });
@@ -147,7 +150,22 @@ describe("CloudflareWorkersAIProvider REST adapter", () => {
     );
     const provider = new CloudflareWorkersAIProvider("account-b", "secret-token", "@cf/meta/model", fetcher);
 
-    await expect(provider.evaluateWriting({ text: "This is my writing.", wordCount: 4 })).rejects.toMatchObject({
+    await expect(provider.evaluateWriting(writingInput)).rejects.toMatchObject({
+      code: "INVALID_PROVIDER_OUTPUT",
+      status: 502
+    });
+  });
+
+  it("rejects a response that does not match the requested evaluation mode", async () => {
+    const fetcher = vi.fn<typeof fetch>(() => Promise.resolve(Response.json({
+      success: true,
+      result: { response: JSON.stringify(evaluation) },
+      errors: [],
+      messages: []
+    })));
+    const provider = new CloudflareWorkersAIProvider("account-b", "secret-token", "@cf/meta/model", fetcher);
+
+    await expect(provider.evaluateWriting({ ...writingInput, mode: "targeted", targetLevel: "B2" })).rejects.toMatchObject({
       code: "INVALID_PROVIDER_OUTPUT",
       status: 502
     });

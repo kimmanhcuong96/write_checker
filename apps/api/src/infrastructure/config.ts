@@ -2,6 +2,14 @@ import { z } from "zod";
 import type { RuntimeEnv } from "./runtime/cloudflare/bindings";
 
 const PositiveIntegerString = z.string().regex(/^\d+$/u).transform(Number).pipe(z.number().int().positive());
+const IanaTimeZone = z.string().trim().min(1).refine((value) => {
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: value }).format();
+    return true;
+  } catch {
+    return false;
+  }
+}, "Invalid IANA time zone");
 
 const ConfigSchema = z.object({
   ENVIRONMENT: z.enum(["development", "production"]).default("development"),
@@ -18,7 +26,8 @@ const ConfigSchema = z.object({
   MAX_WRITING_WORDS: PositiveIntegerString.default(1000),
   MAX_EVALUATIONS_PER_DAY: PositiveIntegerString.default(30),
   LLM_MAX_TOKENS: PositiveIntegerString.optional(),
-  ADMIN_EMAILS: z.string().default("")
+  ADMIN_EMAILS: z.string().default(""),
+  ADMIN_TIME_ZONE: IanaTimeZone.default("Asia/Ho_Chi_Minh")
 });
 
 export type AppConfig = {
@@ -37,6 +46,7 @@ export type AppConfig = {
   maximumDailyEvaluations: number;
   maximumLlmTokens: number | null;
   adminEmails: Set<string>;
+  adminTimeZone: string;
 };
 
 export const readConfig = (env: RuntimeEnv): AppConfig => {
@@ -73,6 +83,7 @@ export const readConfig = (env: RuntimeEnv): AppConfig => {
       value.ADMIN_EMAILS.split(",")
         .map((email) => email.trim().toLowerCase())
         .filter(Boolean)
-    )
+    ),
+    adminTimeZone: value.ADMIN_TIME_ZONE
   };
 };

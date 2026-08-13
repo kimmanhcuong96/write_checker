@@ -10,6 +10,7 @@ const UserInfoSchema = z.object({
   name: z.string().optional(),
   picture: z.url().optional()
 });
+const GOOGLE_TIMEOUT_MS = 15_000;
 
 export class GoogleOAuthClient {
   constructor(
@@ -44,14 +45,16 @@ export class GoogleOAuthClient {
         redirect_uri: this.redirectUri,
         grant_type: "authorization_code",
         code_verifier: verifier
-      })
+      }),
+      signal: AbortSignal.timeout(GOOGLE_TIMEOUT_MS)
     });
     if (!tokenResponse.ok) throw new AppError("AUTH_REQUIRED", "Google sign-in could not be completed.", 401);
     const token = TokenResponseSchema.safeParse(await tokenResponse.json());
     if (!token.success) throw new AppError("AUTH_REQUIRED", "Google returned an invalid token response.", 401);
 
     const profileResponse = await fetch("https://openidconnect.googleapis.com/v1/userinfo", {
-      headers: { authorization: `Bearer ${token.data.access_token}` }
+      headers: { authorization: `Bearer ${token.data.access_token}` },
+      signal: AbortSignal.timeout(GOOGLE_TIMEOUT_MS)
     });
     if (!profileResponse.ok) throw new AppError("AUTH_REQUIRED", "Google profile verification failed.", 401);
     const profile = UserInfoSchema.safeParse(await profileResponse.json());

@@ -1,6 +1,6 @@
-import type { WritingEvaluationResult } from "../../domain/cefr/evaluation";
 import type { AuthenticatedUser, ExternalIdentity } from "../../domain/users/user";
-import type { LlmUsage, UsageBreakdown, UsageSummary } from "../../domain/usage/usage";
+import type { CefrLevel, EvaluationMode, FeedbackLocale, WritingEvaluationResult } from "../../domain/cefr/evaluation";
+import type { AdminDashboard, LlmUsage, UsageBreakdown, UsageSummary } from "../../domain/usage/usage";
 
 export type EvaluationStatus = "processing" | "completed" | "failed";
 
@@ -28,6 +28,9 @@ export interface EvaluationRepository {
     userId: string;
     text: string;
     wordCount: number;
+    mode: EvaluationMode;
+    targetLevel: CefrLevel | null;
+    feedbackLanguage: FeedbackLocale;
     provider: string;
     model: string;
   }): Promise<{ record: EvaluationRecord; created: boolean } | null>;
@@ -36,5 +39,13 @@ export interface EvaluationRepository {
   fail(id: string, usage: LlmUsage, errorType: string): Promise<void>;
   consumedTokens(): Promise<number>;
   countEvaluationsSince(userId: string, since: Date): Promise<number>;
-  usageDashboard(): Promise<{ summaries: UsageSummary[]; breakdown: UsageBreakdown[] }>;
+  usageDashboard(timeZone: string): Promise<{ summaries: UsageSummary[]; breakdown: UsageBreakdown[] }>;
+  adminDashboard(input: { page: number; pageSize: number; search: string; timeZone: string }): Promise<AdminDashboard>;
+  setUserSuspension(input: {
+    actorUserId: string;
+    targetUserId: string;
+    kind: "none" | "days" | "permanent";
+    days: number | null;
+    reason: string | null;
+  }): Promise<boolean>;
 }

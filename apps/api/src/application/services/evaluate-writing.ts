@@ -1,6 +1,7 @@
 import { AppError } from "../errors";
 import type { LLMProvider } from "../ports/llm-provider";
 import type { EvaluationRecord, EvaluationRepository } from "../ports/repositories";
+import type { CefrLevel, EvaluationMode, FeedbackLocale } from "../../domain/cefr/evaluation";
 
 type EvaluationStage = "token_quota_check" | "daily_limit_check" | "provider_evaluation" | "result_persistence";
 
@@ -32,6 +33,9 @@ export class EvaluateWritingService {
     userId: string;
     text: string;
     wordCount: number;
+    mode: EvaluationMode;
+    targetLevel: CefrLevel | null;
+    feedbackLanguage: FeedbackLocale;
   }): Promise<EvaluationRecord> {
     const claim = await this.evaluations.claim({
       ...input,
@@ -76,7 +80,10 @@ export class EvaluateWritingService {
       }
 
       stage = "provider_evaluation";
-      const providerResult = await this.llm.evaluateWriting({ text: input.text, wordCount: input.wordCount });
+      const providerResult = await this.llm.evaluateWriting({
+        text: input.text, wordCount: input.wordCount, mode: input.mode, targetLevel: input.targetLevel,
+        feedbackLanguage: input.feedbackLanguage
+      });
       stage = "result_persistence";
       await this.evaluations.complete(claim.record.id, providerResult.result, providerResult.usage);
       return { ...claim.record, status: "completed", result: providerResult.result };

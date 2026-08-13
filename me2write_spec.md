@@ -890,6 +890,8 @@ Disable repeated submit while the current request is in progress.
 
 Do not implement uncontrolled automatic retries.
 
+All outbound dependencies and browser API calls must have finite, cancellable deadlines. The initial production values are 55 seconds for Workers AI, 15 seconds for Google OAuth and each Neon HTTP query, 70 seconds for browser evaluation submission, and 20 seconds for other browser API requests. Replaced admin search requests must be aborted so stale responses cannot overwrite newer results.
+
 ---
 
 # 23. API design
@@ -911,6 +913,8 @@ POST /api/evaluations
 GET  /api/evaluations/:id
 
 GET  /api/admin/llm-usage
+GET  /api/admin/dashboard
+POST /api/admin/users/:id/suspension
 ```
 
 Exact OAuth endpoints may differ according to the selected implementation.
@@ -962,6 +966,7 @@ Define stable error codes for important cases:
 - invalid provider output,
 - evaluation failed,
 - forbidden/admin required,
+- user temporarily/permanently blocked,
 - internal error.
 
 Do not expose stack traces or secrets to users.
@@ -973,7 +978,7 @@ Do not expose stack traces or secrets to users.
 Provide a simple admin page:
 
 ```text
-/admin/llm-usage
+/admin
 ```
 
 The dashboard is for usage monitoring and cost/quota control, not a full analytics product.
@@ -1004,6 +1009,8 @@ Same metrics.
 
 Allow basic provider/model visibility.
 
+The user-management view must also show each user's evaluation count for today, the current calendar week, the current calendar month, and all time; successful/failed usage; recorded total tokens; last activity; and current access status. Day/week/month/year are calendar periods in a validated, operator-configured IANA reporting time zone (`Asia/Ho_Chi_Minh` by default), and the admin UI must disclose the active time zone. User search and listing must be paginated on the backend with a bounded page size. Admins can search users, suspend a user for 1–3650 days, block access permanently, or restore access. A non-empty reason is required when restricting access. The backend must enforce the action, prevent an admin from blocking their own account, and write an immutable audit record containing actor, target, action, duration, reason, and timestamp. Database constraints must prevent audit deletion through a target-user cascade and must enforce action/duration/reason consistency. Blocking prevents new AI evaluations without deleting the user or their history.
+
 Keep UI simple.
 
 Protect the route with an explicit admin authorization mechanism.
@@ -1022,6 +1029,15 @@ Primary screen should emphasize:
 2. word count,
 3. submit/check action,
 4. evaluation result.
+
+The product has two explicit evaluation modes:
+
+1. **Estimate current level**: estimate CEFR A1–C2 independently and return the standard scores and coaching.
+2. **Verify a target level**: require A1, A2, B1, B2, C1, or C2; state whether the submission meets that exact target; explain material gaps; assess weak sentences; and propose natural sentence and vocabulary alternatives. Provider output must match the requested mode and target or be rejected.
+
+The interface uses a consistent dark technology theme with restrained green/blue accents, responsive panels, visible focus states, and reduced-motion support. Once authenticated, the header must display the user's avatar, name/email, sign-in provider, service-access status, logout, and admin navigation when authorized.
+
+All application UI and requested AI coaching support English (`en`), Vietnamese (`vi`), Simplified Chinese (`zh`), and Japanese (`ja`). On the first visit, choose the first supported entry from `navigator.languages`; match regional variants by base language; fall back to English for every unsupported or unavailable locale. A user's explicit selector choice is stored locally and takes precedence on later visits. English remains the API default for older clients. English source quotations and proposed English replacements remain in English even when explanations use another language.
 
 Recommended states:
 
@@ -1064,7 +1080,11 @@ Requirements:
 - meaningful button text,
 - accessible validation/error messages,
 - no interaction that depends solely on hover,
-- reasonable textarea size on mobile.
+- reasonable textarea size on mobile,
+- semantic grouped selection controls with programmatic selected state,
+- modal focus containment, Escape dismissal, labelled dialog titles, and focus restoration,
+- text alternatives for icon-only retry/close controls,
+- readable supporting text without essential information relying on very small type.
 
 Do not sacrifice usability for decorative animation.
 
@@ -1606,7 +1626,10 @@ The following MVP capabilities are implemented in the current repository:
 - Repeatable migration runner with `schema_migrations` tracking.
 - Server-side word/body validation, atomic `request_id` duplicate protection, optional token quota, and configurable per-user rolling 24-hour evaluation limit.
 - Evaluation result UI for level, seven scores, strengths, problems, corrections, improvement plan, loading states, and controlled errors.
-- Backend-protected admin usage dashboard grouped by day, week, month, year, provider, and model.
+- Two evaluation modes: independent CEFR estimation and exact A1–C2 target verification with sentence/vocabulary alternatives and validated target coaching.
+- English, Vietnamese, Simplified Chinese, and Japanese UI/AI-feedback localization with browser-locale detection, saved preference, and English fallback.
+- Modern responsive technology-themed UI with an authenticated account menu, service status, and admin navigation.
+- Backend-protected admin dashboard grouped by day, week, month, year, provider, model, and user; audited temporary/permanent user suspension and restoration.
 - Narrow credentialed CORS, exact required Origin checks for state-changing browser requests, environment-aware cross-site session cookies, server-side admin authorization, structured errors/logging, and no automatic paid-provider fallback.
 - Minimal high-value tests for validation, provider-result schema, idempotency, token quota, and rate limiting.
 
@@ -1650,5 +1673,23 @@ Deployment credentials and external resources (Google OAuth client, Neon databas
 - Added a server-generated `X-Request-Id` to every response and the same `requestId` to API error bodies and frontend support references.
 - Added structured completion and failure events for all HTTP requests with safe method, path, status, latency, Ray ID, normalized error, and cause-code fields.
 - Separated HTTP correlation IDs from evaluation idempotency IDs and documented the strict no-secret/no-content logging policy.
+
+### 2026-08-13 — Multilingual target coaching and user administration
+
+- Added the dark technology visual system and authenticated user/account surface based on the supplied team reference.
+- Added complete UI and AI-feedback localization for English, Vietnamese, Simplified Chinese, and Japanese, including regional browser-locale detection and English fallback.
+- Added current-level estimation and exact CEFR target-verification modes with structured sentence and vocabulary upgrade guidance.
+- Added server-side paginated user search with per-user daily/weekly/monthly/all-time evaluation and token statistics for administrators.
+- Added audited temporary suspensions, permanent blocks, restoration, self-block protection, and server-side enforcement before AI usage.
+- Reconciled all pre-v1 database fields through the single idempotent `0001_initial.sql` migration as required.
+
+### 2026-08-13 — First-release production hardening
+
+- Made the admin audit trail resistant to target-user cascades and enforced suspension payload consistency in the initial database schema.
+- Added configurable IANA reporting time zones and used them for all admin calendar-period boundaries.
+- Added cancellable timeouts for Workers AI, Google OAuth, Neon queries, browser API requests, and obsolete admin searches.
+- Synchronized a server-side `USER_BLOCKED` response into client state and exposed success/failure counts, restriction expiry, reason, and report time zone in administration views.
+- Added semantic selection groups, labelled writing input, accessible icon actions, dialog focus management/Escape handling, and more readable supporting text.
+- Added regression coverage for admin authorization, self-block prevention, bounded suspension, blocked evaluation enforcement, reporting configuration, and initial-schema audit integrity.
 
 Future changes must add a new dated entry instead of rewriting this history.

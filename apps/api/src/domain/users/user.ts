@@ -3,6 +3,8 @@ export type AuthenticatedUser = {
   email: string | null;
   displayName: string | null;
   avatarUrl: string | null;
+  blockedUntil: string | null;
+  permanentlyBlocked: boolean;
 };
 
 export type ExternalIdentity = {

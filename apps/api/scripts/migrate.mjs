@@ -18,8 +18,14 @@ const migrations = (await readdir(migrationsDir)).filter((file) => /^\d+_.+\.sql
 for (const file of migrations) {
   const version = basename(file, ".sql");
   const applied = await sql.query("SELECT 1 FROM schema_migrations WHERE version = $1", [version]);
-  if (applied.length > 0) continue;
   const migration = await readFile(join(migrationsDir, file), "utf8");
+  if (applied.length > 0) {
+    if (version === "0001_initial") {
+      await sql.transaction((transaction) => [transaction.query(migration)]);
+      console.log(`Reconciled ${version}`);
+    }
+    continue;
+  }
   await sql.transaction((transaction) => [
     transaction.query(migration),
     transaction.query("INSERT INTO schema_migrations (version) VALUES ($1)", [version])
