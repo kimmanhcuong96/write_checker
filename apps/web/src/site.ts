@@ -1,4 +1,5 @@
 import type { Locale } from "./types";
+import { getContent } from "./content-i18n";
 import { SITE_ORIGIN } from "./site-config";
 
 export type SitePath = "/" | "/about" | "/contact" | "/privacy" | "/admin" | "/404";
@@ -61,7 +62,14 @@ const upsertMeta = (selector: string, attribute: "name" | "property", key: strin
 };
 
 export const applyPageMetadata = (path: SitePath, locale: Locale) => {
-  const metadata = path === "/" ? { ...pageMetadata[path], ...localizedHomeMetadata[locale] } : pageMetadata[path];
+  const copy = getContent(locale);
+  const localized = path === "/" ? localizedHomeMetadata[locale]
+    : path === "/about" ? { title: `${copy.about.eyebrow} — me2write`, description: copy.about.intro }
+      : path === "/contact" ? { title: `${copy.contact.title} — me2write`, description: copy.contact.intro }
+        : path === "/privacy" ? { title: `${copy.privacy.eyebrow} — me2write`, description: copy.privacy.intro }
+          : path === "/404" ? { title: `${copy.notFound.title} — me2write`, description: copy.notFound.description }
+            : null;
+  const metadata = localized ? { ...pageMetadata[path], ...localized } : pageMetadata[path];
   document.title = metadata.title;
   upsertMeta('meta[name="description"]', "name", "description", metadata.description);
   upsertMeta('meta[name="robots"]', "name", "robots", metadata.indexable ? "index, follow" : "noindex, nofollow");

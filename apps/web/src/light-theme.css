@@ -107,6 +107,7 @@ textarea:focus, select:focus-visible, input:focus-visible { border-color: var(--
 
 .content-page { padding: 64px 0 24px; }
 .content-page article { width: min(780px, 100%); }
+.centered-page article { margin-inline: auto; }
 .content-page h1, .not-found h1 { max-width: 780px; margin: 0; color: #14261d; font-size: clamp(2.35rem, 5.5vw, 4.3rem); line-height: 1.06; letter-spacing: -.04em; }
 .page-intro { margin: 24px 0 42px; color: #495b51; font-size: 1.1rem; line-height: 1.75; }
 .content-page section { padding: 4px 0 20px; }

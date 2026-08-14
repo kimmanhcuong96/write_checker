@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { api, API_ORIGIN, RequestError } from "./api";
+import { getContent } from "./content-i18n";
 import { AdminUsage } from "./components/AdminUsage";
 import { EvaluationResult } from "./components/EvaluationResult";
 import { Header } from "./components/Header";
@@ -31,9 +32,10 @@ export function App() {
   const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>(() => workspaceFromHash() ?? "checker");
   const words = useMemo(() => countWords(text), [text]);
   const t = (key: Parameters<typeof translate>[1]) => translate(locale, key);
+  const content = getContent(locale);
 
   useEffect(() => {
-    document.documentElement.lang = sitePath === "/about" || sitePath === "/contact" || sitePath === "/privacy" ? "en" : locale;
+    document.documentElement.lang = locale;
     window.localStorage.setItem("me2write_locale", locale);
     applyPageMetadata(sitePath, locale);
   }, [locale, sitePath]);
@@ -81,15 +83,15 @@ export function App() {
     {sitePath === "/admin"
       ? user?.isAdmin ? <AdminUsage locale={locale} currentUserId={user.id}/> : <main className="center-state">{authLoading ? t("loading") : "403"}</main>
       : sitePath === "/about" || sitePath === "/contact" || sitePath === "/privacy"
-        ? <PublicPage path={sitePath}/>
+        ? <PublicPage path={sitePath} locale={locale}/>
         : sitePath === "/404"
-          ? <main className="not-found"><p className="eyebrow">404</p><h1>Page not found</h1><p>The page you requested does not exist.</p><a className="primary-button" href="/">Return to me2write</a></main>
+          ? <main className="not-found"><p className="eyebrow">404</p><h1>{content.notFound.title}</h1><p>{content.notFound.description}</p><a className="primary-button" href="/">{content.notFound.action}</a></main>
           : <main>
         <section className="hero"><div><p className="eyebrow">{t("product")}</p><h1>{t("title")}</h1><p className="hero-copy">{t("subtitle")}</p><p className="system-status"><span/> {t("connected")}</p></div><div className="hero-visual" aria-hidden="true"><span className="orbit orbit-one"/><span className="orbit orbit-two"/><strong>CEFR</strong><small>A1 · A2 · B1 · B2 · C1 · C2</small></div></section>
-        <nav id="features" className="feature-navigation" aria-label="Writing features">
-          <section id="writing-checker" className={workspaceMode === "checker" ? "active" : undefined}><a href={featureHref("checker")} aria-current={workspaceMode === "checker" ? "page" : undefined}><h2>Writing checker</h2><p>Get CEFR-aligned feedback for your own English draft.</p></a></section>
-          <section id="writing-practice" className={workspaceMode === "topic" ? "active" : undefined}><a href={featureHref("topic")} aria-current={workspaceMode === "topic" ? "page" : undefined}><h2>Writing practice</h2><p>Write from guided general and IELTS-style topics.</p></a></section>
-          <section id="exam-practice" className={workspaceMode === "exam" ? "active" : undefined}><a href={featureHref("exam")} aria-current={workspaceMode === "exam" ? "page" : undefined}><h2>Exam practice</h2><p>Complete IELTS and TOEIC writing practice tasks.</p></a></section>
+        <nav id="features" className="feature-navigation" aria-label={content.features.label}>
+          <section id="writing-checker" className={workspaceMode === "checker" ? "active" : undefined}><a href={featureHref("checker")} aria-current={workspaceMode === "checker" ? "page" : undefined}><h2>{content.features.checker}</h2><p>{content.features.checkerDescription}</p></a></section>
+          <section id="writing-practice" className={workspaceMode === "topic" ? "active" : undefined}><a href={featureHref("topic")} aria-current={workspaceMode === "topic" ? "page" : undefined}><h2>{content.features.practice}</h2><p>{content.features.practiceDescription}</p></a></section>
+          <section id="exam-practice" className={workspaceMode === "exam" ? "active" : undefined}><a href={featureHref("exam")} aria-current={workspaceMode === "exam" ? "page" : undefined}><h2>{content.features.exam}</h2><p>{content.features.examDescription}</p></a></section>
         </nav>
         {workspaceMode !== "checker" && <section id="writing-workspace" className="feature-section"><PracticeStudio key={workspaceMode} locale={locale} user={user} mode={workspaceMode} maximumWords={maximumWords}/></section>}
         {workspaceMode === "checker" && <section id="writing-workspace" className="workspace feature-section" aria-labelledby="writing-heading">
@@ -107,6 +109,6 @@ export function App() {
         </section>}
         {workspaceMode === "checker" && result?.evaluation && <EvaluationResult result={result.evaluation} locale={locale}/>}
       </main>}
-    <SiteFooter/>
+    <SiteFooter locale={locale}/>
   </div>;
 }

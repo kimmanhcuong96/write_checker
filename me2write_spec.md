@@ -1643,6 +1643,8 @@ Deployment credentials and external resources (Google OAuth client, Neon databas
 - Reworked the existing visual tokens into a light, readable theme without changing writing evaluation behavior.
 - Added crawlable feature navigation and stable homepage feature anchors, plus public About, Contact, and product-specific Privacy pages.
 - Improved the native language selector and replaced the previous footer text with compact product, information, and privacy navigation.
+- Extended English, Vietnamese, Simplified Chinese, and Japanese localization across public navigation, feature cards, practice and exam controls, result labels, administration labels, public information pages, error states, and runtime metadata. English writing prompts remain unchanged because they are the material being practised.
+- Centered the About and Contact content containers while retaining a readable long-form layout for Privacy.
 - Added dedicated Vite HTML entries that Cloudflare Pages serves at extensionless URLs, with unique metadata for public information routes, canonical and Open Graph metadata, accurate `WebSite` structured data on the homepage, generated `robots.txt` and sitemap output, and `noindex` metadata for administration.
 
 ### 2026-08-13 — Initial MVP implementation

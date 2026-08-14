@@ -1,14 +1,16 @@
 import type { Locale, User } from "../types";
+import { getContent } from "../content-i18n";
 import { localeFlags, localeLabels, translate } from "../i18n";
 
 export function Header({ user, locale, onLocaleChange, onLogout }: {
   user: User | null; locale: Locale; onLocaleChange: (locale: Locale) => void; onLogout: () => void;
 }) {
   const t = (key: Parameters<typeof translate>[1]) => translate(locale, key);
+  const copy = getContent(locale).navigation;
   return <header className="site-header">
-    <a className="brand" href="/" aria-label="me2write home"><span className="brand-mark">M2</span><span><b>me2write</b><small>Writing intelligence</small></span></a>
-    <nav aria-label="Primary navigation">
-      <div className="primary-links"><a className="nav-link" href="/">Home</a><a className="nav-link" href="/#features">Features</a><a className="nav-link" href="/about">About</a><a className="nav-link" href="/contact">Contact</a></div>
+    <a className="brand" href="/" aria-label={copy.homeLabel}><span className="brand-mark">M2</span><span><b>me2write</b><small>{copy.brandTagline}</small></span></a>
+    <nav aria-label={copy.primaryLabel}>
+      <div className="primary-links"><a className="nav-link" href="/">{copy.home}</a><a className="nav-link" href="/#features">{copy.features}</a><a className="nav-link" href="/about">{copy.about}</a><a className="nav-link" href="/contact">{copy.contact}</a></div>
       <label className="locale-control"><span aria-hidden="true">{localeFlags[locale]}</span><span className="locale-label">{t("language")}</span><select aria-label={t("language")} value={locale} onChange={(event) => onLocaleChange(event.target.value as Locale)}>
         {(Object.keys(localeLabels) as Locale[]).map((item) => <option key={item} value={item}>{localeLabels[item]}</option>)}
       </select></label>

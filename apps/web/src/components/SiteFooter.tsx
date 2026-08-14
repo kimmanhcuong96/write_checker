@@ -1,9 +1,13 @@
-export function SiteFooter() {
+import { getContent } from "../content-i18n";
+import type { Locale } from "../types";
+
+export function SiteFooter({ locale }: { locale: Locale }) {
+  const copy = getContent(locale);
   return <footer className="site-footer">
-    <nav aria-label="Footer navigation">
-      <div><h2>Product</h2><a href="/#writing-checker">Writing checker</a><a href="/#writing-practice">Writing practice</a><a href="/#exam-practice">Exam practice</a></div>
-      <div><h2>Information</h2><a href="/about">About me2write</a><a href="/contact">Contact</a></div>
-      <div><h2>Legal</h2><a href="/privacy">Privacy policy</a></div>
+    <nav aria-label={copy.footer.label}>
+      <div><h2>{copy.footer.product}</h2><a href="/#writing-checker">{copy.features.checker}</a><a href="/#writing-practice">{copy.features.practice}</a><a href="/#exam-practice">{copy.features.exam}</a></div>
+      <div><h2>{copy.footer.information}</h2><a href="/about">{copy.footer.about}</a><a href="/contact">{copy.footer.contact}</a></div>
+      <div><h2>{copy.footer.legal}</h2><a href="/privacy">{copy.footer.privacy}</a></div>
     </nav>
   </footer>;
 }
