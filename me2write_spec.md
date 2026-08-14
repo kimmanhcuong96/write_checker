@@ -1628,7 +1628,8 @@ The following MVP capabilities are implemented in the current repository:
 - Evaluation result UI for level, seven scores, strengths, problems, corrections, improvement plan, loading states, and controlled errors.
 - Two evaluation modes: independent CEFR estimation and exact A1–C2 target verification with sentence/vocabulary alternatives and validated target coaching.
 - English, Vietnamese, Simplified Chinese, and Japanese UI/AI-feedback localization with browser-locale detection, saved preference, and English fallback.
-- Modern responsive technology-themed UI with an authenticated account menu, service status, and admin navigation.
+- Light responsive UI with an authenticated account menu, accessible language selector, feature navigation, public information pages, and admin navigation.
+- Crawlable public routes for the homepage, About, Contact, and Privacy with route-specific metadata, canonical URLs, Open Graph metadata, a generated sitemap, robots policy, and non-indexable administration metadata.
 - Backend-protected admin dashboard grouped by day, week, month, year, provider, model, and user; audited temporary/permanent user suspension and restoration.
 - Narrow credentialed CORS, exact required Origin checks for state-changing browser requests, environment-aware cross-site session cookies, server-side admin authorization, structured errors/logging, and no automatic paid-provider fallback.
 - Minimal high-value tests for validation, provider-result schema, idempotency, token quota, and rate limiting.
@@ -1636,6 +1637,13 @@ The following MVP capabilities are implemented in the current repository:
 Deployment credentials and external resources (Google OAuth client, Neon database, Worker account A, Workers AI account B/token, Pages project, and production domains) remain operator configuration; they are not committed to this repository.
 
 ## 49.3 Implementation change log
+
+### 2026-08-14 — Public site UI and SEO structure
+
+- Reworked the existing visual tokens into a light, readable theme without changing writing evaluation behavior.
+- Added crawlable feature navigation and stable homepage feature anchors, plus public About, Contact, and product-specific Privacy pages.
+- Improved the native language selector and replaced the previous footer text with compact product, information, and privacy navigation.
+- Added dedicated Vite HTML entries that Cloudflare Pages serves at extensionless URLs, with unique metadata for public information routes, canonical and Open Graph metadata, accurate `WebSite` structured data on the homepage, generated `robots.txt` and sitemap output, and `noindex` metadata for administration.
 
 ### 2026-08-13 — Initial MVP implementation
 

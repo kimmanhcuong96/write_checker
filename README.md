@@ -215,7 +215,9 @@ Connect the Cloudflare Pages project to the GitHub repository and configure:
 - output directory: `dist`
 - environment variable: `VITE_API_ORIGIN=https://me2write-api-production.kimmanhcuong96.workers.dev`
 
-Every push to the configured production branch is built and published by Cloudflare; other enabled branches can receive preview deployments. The included `_redirects` supports direct navigation to `/admin`. Configure the API's `APP_ORIGIN` to `https://write-checker.pages.dev`; credentialed CORS intentionally does not use `*`. If either public URL changes, update `APP_ORIGIN`, `API_ORIGIN`, `VITE_API_ORIGIN`, and Google's authorized redirect URI as one deployment change.
+Every push to the configured production branch is built and published by Cloudflare; other enabled branches can receive preview deployments. The public site exposes `/`, `/about`, `/contact`, and `/privacy`; `/admin` remains authenticated and non-indexable. Vite builds a dedicated HTML entry for each public information route and generates `robots.txt` plus `sitemap.xml` from the route list in `apps/web/src/site-config.ts`. Cloudflare Pages serves those HTML entries at extensionless URLs and uses its default SPA fallback for unknown application routes; do not add a catch-all `_redirects` rewrite because it would also intercept generated SEO and static asset files.
+
+`apps/web/src/site-config.ts` is the frontend source of truth for the canonical site origin and indexable route list. Configure the API's `APP_ORIGIN` to the same origin. If either public URL changes, update that file, `APP_ORIGIN`, `API_ORIGIN`, `VITE_API_ORIGIN`, and Google's authorized redirect URI as one deployment change; credentialed CORS intentionally does not use `*`.
 
 ## Change the model or add a provider
 

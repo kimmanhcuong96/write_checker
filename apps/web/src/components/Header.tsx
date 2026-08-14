@@ -8,8 +8,8 @@ export function Header({ user, locale, onLocaleChange, onLogout }: {
   return <header className="site-header">
     <a className="brand" href="/" aria-label="me2write home"><span className="brand-mark">M2</span><span><b>me2write</b><small>Writing intelligence</small></span></a>
     <nav aria-label="Primary navigation">
-      <a className="nav-link" href="https://me2talk.com" target="_blank" rel="noreferrer">{t("speaking")}</a>
-      <label className="locale-control"><span>{localeFlags[locale]}</span><select aria-label={t("language")} value={locale} onChange={(event) => onLocaleChange(event.target.value as Locale)}>
+      <div className="primary-links"><a className="nav-link" href="/">Home</a><a className="nav-link" href="/#features">Features</a><a className="nav-link" href="/about">About</a><a className="nav-link" href="/contact">Contact</a></div>
+      <label className="locale-control"><span aria-hidden="true">{localeFlags[locale]}</span><span className="locale-label">{t("language")}</span><select aria-label={t("language")} value={locale} onChange={(event) => onLocaleChange(event.target.value as Locale)}>
         {(Object.keys(localeLabels) as Locale[]).map((item) => <option key={item} value={item}>{localeLabels[item]}</option>)}
       </select></label>
       {user && <details className="user-menu"><summary><Avatar user={user}/><span><b>{user.displayName ?? user.email ?? t("account")}</b><small>{user.isAdmin ? t("administrator") : t("member")}</small></span><i>⌄</i></summary>
