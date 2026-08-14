@@ -3,6 +3,7 @@ import { AppError } from "../../../application/errors";
 import type { LLMProvider, ProviderEvaluation, WritingEvaluationInput } from "../../../application/ports/llm-provider";
 import { buildEvaluationMessages } from "../../../application/prompt";
 import { WritingEvaluationResultSchema } from "../../../domain/cefr/evaluation";
+import { PracticeEvaluationSchema } from "../../../domain/practice/evaluation";
 
 const responseSchema = {
   type: "object",
@@ -62,6 +63,20 @@ const responseSchema = {
   },
   required: ["level", "levelReason", "scores", "strengths", "problems", "corrections", "improvementPlan", "targetAssessment"]
 } as const;
+const feedbackArraySchema = { type: "array", minItems: 1, maxItems: 8, items: { type: "string" } } as const;
+const ieltsCriteriaSchema = { type: "object", additionalProperties: false, properties: {
+  taskAchievement: { type: "number", minimum: 0, maximum: 9 }, coherenceCohesion: { type: "number", minimum: 0, maximum: 9 },
+  lexicalResource: { type: "number", minimum: 0, maximum: 9 }, grammaticalRangeAccuracy: { type: "number", minimum: 0, maximum: 9 }, feedback: feedbackArraySchema
+}, required: ["taskAchievement", "coherenceCohesion", "lexicalResource", "grammaticalRangeAccuracy", "feedback"] } as const;
+const ieltsResponseSchema = { type: "object", additionalProperties: false, properties: {
+  kind: { type: "string", enum: ["IELTS"] }, task1Band: { type: "number", minimum: 0, maximum: 9 }, task2Band: { type: "number", minimum: 0, maximum: 9 }, overallBand: { type: "number", minimum: 0, maximum: 9 },
+  task1Criteria: ieltsCriteriaSchema, task2Criteria: ieltsCriteriaSchema, strengths: feedbackArraySchema, weaknesses: feedbackArraySchema, improvementSuggestions: feedbackArraySchema
+}, required: ["kind", "task1Band", "task2Band", "overallBand", "task1Criteria", "task2Criteria", "strengths", "weaknesses", "improvementSuggestions"] } as const;
+const toeicResponseSchema = { type: "object", additionalProperties: false, properties: {
+  kind: { type: "string", enum: ["TOEIC"] }, estimatedScore: { type: "integer", minimum: 0, maximum: 200 },
+  questionFeedback: { type: "array", minItems: 8, maxItems: 8, items: { type: "object", additionalProperties: false, properties: { questionNumber: { type: "integer", minimum: 1, maximum: 8 }, feedback: { type: "string" } }, required: ["questionNumber", "feedback"] } },
+  strengths: feedbackArraySchema, weaknesses: feedbackArraySchema, improvementSuggestions: feedbackArraySchema
+}, required: ["kind", "estimatedScore", "questionFeedback", "strengths", "weaknesses", "improvementSuggestions"] } as const;
 
 const AiResponseSchema = z.object({
   response: z.unknown(),
@@ -146,8 +161,8 @@ export class CloudflareWorkersAIProvider implements LLMProvider {
         body: JSON.stringify({
           messages: buildEvaluationMessages(input),
           temperature: 0.2,
-          max_tokens: input.mode === "targeted" ? 2000 : 1400,
-          response_format: { type: "json_schema", json_schema: responseSchema }
+          max_tokens: input.context?.mode === "IELTS" || input.context?.mode === "TOEIC" ? 2400 : input.mode === "targeted" ? 2000 : 1400,
+          response_format: { type: "json_schema", json_schema: input.context?.mode === "IELTS" ? ieltsResponseSchema : input.context?.mode === "TOEIC" ? toeicResponseSchema : responseSchema }
         }),
         signal: AbortSignal.timeout(WORKERS_AI_TIMEOUT_MS)
       });
@@ -207,29 +222,26 @@ export class CloudflareWorkersAIProvider implements LLMProvider {
       typeof envelope.data.response === "string"
         ? this.parseJson(envelope.data.response)
         : envelope.data.response;
-    const result = WritingEvaluationResultSchema.safeParse(candidate);
-    if (!result.success) {
-      throw new AppError("INVALID_PROVIDER_OUTPUT", "The evaluator returned feedback in an invalid format.", 502, result.error);
+    const practice = input.context?.mode === "IELTS" || input.context?.mode === "TOEIC" ? PracticeEvaluationSchema.safeParse(candidate) : null;
+    const result = practice ? null : WritingEvaluationResultSchema.safeParse(candidate);
+    if (practice && !practice.success) throw new AppError("INVALID_PROVIDER_OUTPUT", "The evaluator returned practice feedback in an invalid format.", 502, practice.error);
+    if (!practice && !result?.success) {
+      throw new AppError("INVALID_PROVIDER_OUTPUT", "The evaluator returned feedback in an invalid format.", 502, result!.error);
     }
+    if (practice) return { result: practice.data, usage: this.usageFrom(envelope.data.usage) };
+    if (!result?.success) throw new AppError("INVALID_PROVIDER_OUTPUT", "The evaluator returned feedback in an invalid format.", 502);
+    const cefrResult = result.data;
     const targetMismatch =
-      (input.mode === "estimate" && result.data.targetAssessment !== null) ||
+      (input.mode === "estimate" && cefrResult.targetAssessment !== null) ||
       (input.mode === "targeted" &&
-        (result.data.targetAssessment === null || result.data.targetAssessment.targetLevel !== input.targetLevel));
+        (cefrResult.targetAssessment === null || cefrResult.targetAssessment.targetLevel !== input.targetLevel));
     if (targetMismatch) {
       throw new AppError("INVALID_PROVIDER_OUTPUT", "The evaluator returned feedback for the wrong evaluation mode.", 502);
     }
-    const usage = envelope.data.usage;
-    return {
-      result: result.data,
-      usage: {
-        inputTokens: usage?.prompt_tokens ?? usage?.input_tokens ?? null,
-        outputTokens: usage?.completion_tokens ?? usage?.output_tokens ?? null,
-        totalTokens: usage?.total_tokens ?? ((usage?.prompt_tokens ?? usage?.input_tokens ?? 0) + (usage?.completion_tokens ?? usage?.output_tokens ?? 0) || null),
-        providerUsageValue: null,
-        providerUsageUnit: null
-      }
-    };
+    return { result: cefrResult, usage: this.usageFrom(envelope.data.usage) };
   }
+
+  private usageFrom(usage: { prompt_tokens?: number | undefined; completion_tokens?: number | undefined; total_tokens?: number | undefined; input_tokens?: number | undefined; output_tokens?: number | undefined } | undefined) { return { inputTokens: usage?.prompt_tokens ?? usage?.input_tokens ?? null, outputTokens: usage?.completion_tokens ?? usage?.output_tokens ?? null, totalTokens: usage?.total_tokens ?? ((usage?.prompt_tokens ?? usage?.input_tokens ?? 0) + (usage?.completion_tokens ?? usage?.output_tokens ?? 0) || null), providerUsageValue: null, providerUsageUnit: null }; }
 
   private parseJson(value: string): unknown {
     try {

@@ -14,6 +14,7 @@ import { readConfig } from "../infrastructure/config";
 import { NeonRepositories } from "../infrastructure/db/neon/neon-repositories";
 import { CloudflareWorkersAIProvider } from "../infrastructure/llm/cloudflare-workers-ai/provider";
 import type { RuntimeEnv } from "../infrastructure/runtime/cloudflare/bindings";
+import { GENERAL_TOPICS, IELTS_TOPICS, IELTS_TASKS, TOEIC_TASKS, createIeltsTasks, randomTopic, type ExamTask, type PracticeTopic } from "../domain/practice/content";
 
 type AppVariables = {
   user: AuthenticatedUser;
@@ -24,6 +25,20 @@ type AppContext = Context<{ Bindings: RuntimeEnv; Variables: AppVariables }>;
 const SESSION_COOKIE = "me2write_session";
 const OAUTH_STATE_COOKIE = "me2write_oauth_state";
 const OAUTH_VERIFIER_COOKIE = "me2write_oauth_verifier";
+const topicTimerSeconds = [300, 600, 900, 1200, 1800, 2700, 3600] as const;
+const TopicTimerSchema = z.union([z.null(), z.literal(topicTimerSeconds[0]), z.literal(topicTimerSeconds[1]), z.literal(topicTimerSeconds[2]), z.literal(topicTimerSeconds[3]), z.literal(topicTimerSeconds[4]), z.literal(topicTimerSeconds[5]), z.literal(topicTimerSeconds[6])]);
+const PracticeSessionRequestSchema = z.union([
+  z.object({ mode: z.literal("TOPIC"), category: z.enum(["GENERAL", "IELTS"]), promptId: z.string().trim().min(1).max(100), configuredTimeSeconds: TopicTimerSchema }),
+  z.object({ mode: z.literal("EXAM"), examType: z.literal("IELTS"), examVariant: z.enum(["IELTS_ACADEMIC", "IELTS_GENERAL"]) }),
+  z.object({ mode: z.literal("EXAM"), examType: z.literal("TOEIC") })
+]);
+const PracticeSubmissionSchema = z.object({ answers: z.array(z.string().max(20_000)).min(1).max(8), feedbackLanguage: z.enum(["en", "vi", "zh", "ja"]).default("en") });
+
+const responseText = (tasks: readonly (ExamTask | PracticeTopic)[], answers: readonly string[]) => answers.map((answer, index) => {
+  const task = tasks[index];
+  const label = task && "questionNumber" in task ? `Question ${task.questionNumber}` : "Topic response";
+  return `${label}:\n${answer.trim()}`;
+}).join("\n\n");
 
 const errorProperty = (value: unknown, property: string): string | number | undefined => {
   if (typeof value !== "object" || value === null || !(property in value)) return undefined;
@@ -143,9 +158,36 @@ export const createApp = () => {
     await next();
   });
   app.use("/api/evaluations", bodyLimit({ maxSize: 24 * 1024, onError: (context) => context.json(errorPayload(context.get("httpRequestId") as string, "INVALID_INPUT", "Request body is too large."), 413) }));
+  app.use("/api/practice/sessions/*", bodyLimit({ maxSize: 128 * 1024, onError: (context) => context.json(errorPayload(context.get("httpRequestId") as string, "INVALID_INPUT", "Request body is too large."), 413) }));
 
   app.get("/health", (context) => context.json({ status: "ok" }));
   app.get("/api/config", (context) => context.json({ maximumWritingWords: readConfig(context.env).maximumWritingWords }));
+  app.get("/api/practice/content", (context) => context.json({ topics: [...GENERAL_TOPICS, ...IELTS_TOPICS], exams: { ielts: IELTS_TASKS, toeic: TOEIC_TASKS } }));
+  app.get("/api/practice/topics/random", (context) => {
+    const query = z.object({ category: z.enum(["GENERAL", "IELTS"]) }).safeParse(context.req.query());
+    if (!query.success) throw new AppError("INVALID_INPUT", "A valid topic category is required.", 400);
+    const topic = randomTopic(query.data.category);
+    if (!topic) throw new AppError("NOT_FOUND", "No active topic is available.", 404);
+    return context.json({ topic });
+  });
+  app.post("/api/practice/sessions", requireAuth, requireActiveUser, async (context) => {
+    const body = PracticeSessionRequestSchema.safeParse(await context.req.json().catch(() => null));
+    if (!body.success) throw new AppError("INVALID_INPUT", "Invalid practice session request.", 400);
+    const value = body.data;
+    const topic = value.mode === "TOPIC" ? [...GENERAL_TOPICS, ...IELTS_TOPICS].find((item) => item.id === value.promptId && item.category === value.category && item.active) : null;
+    if (value.mode === "TOPIC" && !topic) throw new AppError("INVALID_INPUT", "A valid practice topic is required.", 400);
+    const examType = value.mode === "EXAM" ? value.examType : null;
+    const examVariant = value.mode === "EXAM" && value.examType === "IELTS" ? value.examVariant : null;
+    const tasks = value.mode === "TOPIC" ? [topic!] : value.examType === "TOEIC" ? TOEIC_TASKS : createIeltsTasks(value.examVariant);
+    const timeLimitSeconds = value.mode === "TOPIC" ? value.configuredTimeSeconds : 3600;
+    const session = await repositories(context).createPracticeSession({ userId: context.get("user").id, mode: value.mode, category: value.mode === "TOPIC" ? value.category : null, examType, examVariant, timeLimitSeconds, tasks });
+    return context.json({ ...session, serverNow: new Date().toISOString() }, 201);
+  });
+  app.get("/api/practice/sessions/:id", requireAuth, async (context) => {
+    const session = await repositories(context).findPracticeSession(context.req.param("id"), context.get("user").id);
+    if (!session) throw new AppError("NOT_FOUND", "Practice session not found.", 404);
+    return context.json({ ...session, serverNow: new Date().toISOString() });
+  });
 
   app.get("/auth/google", async (context) => {
     const config = readConfig(context.env);
@@ -244,6 +286,28 @@ export const createApp = () => {
       console.error(JSON.stringify({ event: "evaluation_failed", httpRequestId: context.get("httpRequestId"), evaluationRequestId: parsed.data.requestId, userId: user.id, provider: config.llmProvider, model: config.llmModel, latencyMs: Date.now() - startedAt, errorType: error instanceof AppError ? error.code : "INTERNAL_ERROR" }));
       throw error;
     }
+  });
+
+  app.post("/api/practice/sessions/:id/submit", requireAuth, requireActiveUser, async (context) => {
+    const body = PracticeSubmissionSchema.safeParse(await context.req.json().catch(() => null));
+    if (!body.success) throw new AppError("INVALID_INPUT", "Invalid practice answers.", 400);
+    const db = repositories(context); const current = await db.findPracticeSession(context.req.param("id"), context.get("user").id);
+    if (!current) throw new AppError("NOT_FOUND", "Practice session not found.", 404);
+    const answers = body.data.answers.map((answer) => answer.trim());
+    if (answers.length !== current.tasks.length || answers.some((answer) => answer.length === 0)) throw new AppError("INVALID_INPUT", "Every required task must have an answer.", 400);
+    const config = readConfig(context.env);
+    if (answers.some((answer) => countWords(answer) > config.maximumWritingWords)) throw new AppError("WRITING_TOO_LONG", `Each answer cannot exceed ${config.maximumWritingWords} words.`, 400);
+    if (current.status === "SUBMITTED" && JSON.stringify(current.answers) !== JSON.stringify(answers)) throw new AppError("DUPLICATE_REQUEST", "This session has already been finalized.", 409);
+    const finalized = current.status === "SUBMITTED" ? current : await db.finalizePracticeSession(current.id, context.get("user").id, answers);
+    if (!finalized || finalized.status !== "SUBMITTED") throw new AppError("EVALUATION_FAILED", "The practice session could not be finalized.", 409);
+    const text = responseText(finalized.tasks, answers);
+    const firstTopic = finalized.mode === "TOPIC" ? finalized.tasks[0] as PracticeTopic | undefined : undefined;
+    const examTasks = finalized.mode === "EXAM" ? finalized.tasks as readonly ExamTask[] : undefined;
+    const evaluationContext = finalized.mode === "TOPIC"
+      ? { mode: "TOPIC" as const, category: finalized.category ?? "GENERAL", promptId: firstTopic?.id, prompt: firstTopic?.prompt }
+      : { mode: finalized.examType ?? "IELTS", examType: finalized.examType ?? "IELTS", ...(finalized.examVariant ? { examVariant: finalized.examVariant } : {}), tasks: examTasks?.map((task) => ({ questionNumber: task.questionNumber, taskType: task.taskType, prompt: task.prompt, ...(task.visualDescription ? { visualDescription: task.visualDescription } : {}), ...(task.providedWords ? { providedWords: task.providedWords } : {}), ...(task.wordMinimum ? { wordMinimum: task.wordMinimum } : {}) })) };
+    const result = await new EvaluateWritingService(db, new CloudflareWorkersAIProvider(config.aiAccountId, config.aiApiToken, config.llmModel), config.maximumLlmTokens, config.maximumDailyEvaluations).execute({ requestId: finalized.id, userId: context.get("user").id, text, wordCount: countWords(text), mode: "estimate", targetLevel: null, feedbackLanguage: body.data.feedbackLanguage, context: evaluationContext });
+    return context.json({ session: finalized, evaluation: evaluationResponse(result) });
   });
 
   app.get("/api/evaluations/:id", requireAuth, async (context) => {

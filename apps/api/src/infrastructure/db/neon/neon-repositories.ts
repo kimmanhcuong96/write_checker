@@ -1,6 +1,8 @@
 import { neon } from "@neondatabase/serverless";
 import { z } from "zod";
 import { WritingEvaluationResultSchema, type CefrLevel, type EvaluationMode, type FeedbackLocale, type WritingEvaluationResult } from "../../../domain/cefr/evaluation";
+import { PracticeEvaluationSchema, type PracticeEvaluation } from "../../../domain/practice/evaluation";
+import type { ExamTask, PracticeTopic } from "../../../domain/practice/content";
 import type { AuthenticatedUser, ExternalIdentity } from "../../../domain/users/user";
 import type { AdminDashboard, LlmUsage, UsageBreakdown, UsageSummary } from "../../../domain/usage/usage";
 import type {
@@ -8,6 +10,7 @@ import type {
   EvaluationRepository,
   SessionRepository,
   UserRepository
+  ,PracticeSessionRepository
 } from "../../../application/ports/repositories";
 
 type Queryable = ReturnType<typeof neon>;
@@ -18,6 +21,11 @@ const UserRowSchema = z.object({
   blocked_until: z.string().nullable(), permanently_blocked: z.boolean()
 });
 const EvaluationRowSchema = z.object({ id: z.string(), user_id: z.string(), request_id: z.string(), status: z.enum(["processing", "completed", "failed"]), result_json: z.unknown(), created: z.boolean().optional() });
+const PracticeTaskSchema = z.union([
+  z.object({ id: z.string(), category: z.enum(["GENERAL", "IELTS"]), title: z.string(), prompt: z.string(), active: z.boolean() }),
+  z.object({ id: z.string(), questionNumber: z.number().int(), taskType: z.string(), prompt: z.string(), wordMinimum: z.number().int().optional(), recommendedSeconds: z.number().int().optional(), visualDescription: z.string().optional(), visualAsset: z.string().optional(), providedWords: z.tuple([z.string(), z.string()]).optional() })
+]);
+const PracticeSessionRowSchema = z.object({ id: z.string(), user_id: z.string(), mode: z.enum(["TOPIC", "EXAM"]), category: z.enum(["GENERAL", "IELTS"]).nullable(), exam_type: z.enum(["IELTS", "TOEIC"]).nullable(), exam_variant: z.enum(["IELTS_ACADEMIC", "IELTS_GENERAL"]).nullable(), status: z.enum(["READY", "IN_PROGRESS", "TIME_EXPIRED", "SUBMITTED"]), started_at: z.string().nullable(), submitted_at: z.string().nullable(), time_limit_seconds: z.number().nullable(), elapsed_seconds: z.number(), tasks_json: z.array(PracticeTaskSchema), answers_json: z.array(z.string()) });
 type UserRow = z.infer<typeof UserRowSchema>;
 type EvaluationRow = z.infer<typeof EvaluationRowSchema>;
 
@@ -35,10 +43,10 @@ const mapEvaluation = (row: EvaluationRow): EvaluationRecord => ({
   userId: row.user_id,
   requestId: row.request_id,
   status: row.status,
-  result: row.result_json === null ? null : WritingEvaluationResultSchema.parse(row.result_json)
+  result: row.result_json === null ? null : (WritingEvaluationResultSchema.safeParse(row.result_json).success ? WritingEvaluationResultSchema.parse(row.result_json) : PracticeEvaluationSchema.parse(row.result_json))
 });
 
-export class NeonRepositories implements UserRepository, SessionRepository, EvaluationRepository {
+export class NeonRepositories implements UserRepository, SessionRepository, EvaluationRepository, PracticeSessionRepository {
   private readonly sql: Queryable;
 
   constructor(connectionString: string) {
@@ -134,7 +142,7 @@ export class NeonRepositories implements UserRepository, SessionRepository, Eval
     return rows[0] ? mapEvaluation(rows[0]) : null;
   }
 
-  async complete(id: string, result: WritingEvaluationResult, usage: LlmUsage): Promise<void> {
+  async complete(id: string, result: WritingEvaluationResult | PracticeEvaluation, usage: LlmUsage): Promise<void> {
     await this.execute(
       `WITH updated AS (
          UPDATE writing_evaluations SET status = 'completed', estimated_level = $2,
@@ -148,7 +156,7 @@ export class NeonRepositories implements UserRepository, SessionRepository, Eval
        SELECT provider, model, user_id, id, $4, $5, $6, $7, $8, true FROM updated`,
       [
         id,
-        result.level,
+        "level" in result ? result.level : null,
         JSON.stringify(result),
         usage.inputTokens,
         usage.outputTokens,
@@ -157,6 +165,26 @@ export class NeonRepositories implements UserRepository, SessionRepository, Eval
         usage.providerUsageUnit
       ]
     );
+  }
+
+  private mapPractice(row: z.infer<typeof PracticeSessionRowSchema>) {
+    return { id: row.id, userId: row.user_id, mode: row.mode, category: row.category, examType: row.exam_type, examVariant: row.exam_variant, status: row.status, startedAt: row.started_at, submittedAt: row.submitted_at, timeLimitSeconds: row.time_limit_seconds, elapsedSeconds: row.elapsed_seconds, tasks: row.tasks_json as Array<ExamTask | PracticeTopic>, answers: row.answers_json };
+  }
+  async createPracticeSession(input: { userId: string; mode: "TOPIC" | "EXAM"; category: "GENERAL" | "IELTS" | null; examType: "IELTS" | "TOEIC" | null; examVariant: "IELTS_ACADEMIC" | "IELTS_GENERAL" | null; timeLimitSeconds: number | null; tasks: readonly (ExamTask | PracticeTopic)[] }) {
+    const rows = await this.query(PracticeSessionRowSchema, `INSERT INTO practice_sessions (user_id, mode, category, exam_type, exam_variant, status, started_at, time_limit_seconds, tasks_json, answers_json) VALUES ($1,$2,$3,$4,$5,'IN_PROGRESS',now(),$6,$7::jsonb,'[]'::jsonb) RETURNING id,user_id,mode,category,exam_type,exam_variant,status,started_at::text,submitted_at::text,time_limit_seconds,elapsed_seconds,tasks_json,answers_json`, [input.userId,input.mode,input.category,input.examType,input.examVariant,input.timeLimitSeconds,JSON.stringify(input.tasks)]);
+    const row = rows[0];
+    if (!row) throw new Error("Practice session insert returned no row");
+    return this.mapPractice(row);
+  }
+  async findPracticeSession(id: string, userId: string) {
+    await this.execute(`UPDATE practice_sessions SET status='TIME_EXPIRED', elapsed_seconds=time_limit_seconds, updated_at=now() WHERE id=$1 AND user_id=$2 AND status='IN_PROGRESS' AND time_limit_seconds IS NOT NULL AND now() >= started_at + (time_limit_seconds * interval '1 second')`, [id,userId]);
+    const rows = await this.query(PracticeSessionRowSchema, "SELECT id,user_id,mode,category,exam_type,exam_variant,status,started_at::text,submitted_at::text,time_limit_seconds,elapsed_seconds,tasks_json,answers_json FROM practice_sessions WHERE id=$1 AND user_id=$2", [id,userId]);
+    return rows[0] ? this.mapPractice(rows[0]) : null;
+  }
+  async finalizePracticeSession(id: string, userId: string, answers: string[]) {
+    await this.execute(`UPDATE practice_sessions SET status='TIME_EXPIRED', elapsed_seconds=time_limit_seconds, updated_at=now() WHERE id=$1 AND user_id=$2 AND status='IN_PROGRESS' AND time_limit_seconds IS NOT NULL AND now() >= started_at + (time_limit_seconds * interval '1 second')`, [id,userId]);
+    const rows = await this.query(PracticeSessionRowSchema, `UPDATE practice_sessions SET answers_json=$3::jsonb,status='SUBMITTED',submitted_at=now(),elapsed_seconds=CASE WHEN time_limit_seconds IS NULL THEN GREATEST(0,EXTRACT(EPOCH FROM (now()-started_at))::integer) ELSE LEAST(time_limit_seconds,GREATEST(0,EXTRACT(EPOCH FROM (now()-started_at))::integer)) END,updated_at=now() WHERE id=$1 AND user_id=$2 AND status IN ('IN_PROGRESS','TIME_EXPIRED') RETURNING id,user_id,mode,category,exam_type,exam_variant,status,started_at::text,submitted_at::text,time_limit_seconds,elapsed_seconds,tasks_json,answers_json`, [id,userId,JSON.stringify(answers)]);
+    return rows[0] ? this.mapPractice(rows[0]) : this.findPracticeSession(id,userId);
   }
 
   async fail(id: string, usage: LlmUsage, errorType: string): Promise<void> {

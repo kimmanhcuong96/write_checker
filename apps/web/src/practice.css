@@ -1,0 +1,8 @@
+.exam-visual {
+  display: block;
+  width: min(100%, 640px);
+  height: auto;
+  margin: 1rem 0;
+  border: 1px solid var(--line);
+  border-radius: 0.75rem;
+}

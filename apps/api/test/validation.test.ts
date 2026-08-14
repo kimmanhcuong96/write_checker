@@ -28,6 +28,11 @@ describe("writing request validation", () => {
     expect(parsed.success && parsed.data.feedbackLanguage).toBe("en");
     expect(schema.safeParse({ ...base, feedbackLanguage: "fr" }).success).toBe(false);
   });
+
+  it("does not expose trusted practice evaluation context on the public evaluation request", () => {
+    const parsed = createWritingRequestSchema(1000).parse({ requestId: crypto.randomUUID(), text: "A valid response.", context: { mode: "IELTS" } });
+    expect("context" in parsed).toBe(false);
+  });
 });
 
 describe("provider result validation", () => {

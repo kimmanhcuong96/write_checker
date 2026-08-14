@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { CloudflareWorkersAIProvider } from "../src/infrastructure/llm/cloudflare-workers-ai/provider";
+import { z } from "zod";
 
 const evaluation = {
   level: "B1",
@@ -169,5 +170,26 @@ describe("CloudflareWorkersAIProvider REST adapter", () => {
       code: "INVALID_PROVIDER_OUTPUT",
       status: 502
     });
+  });
+
+  it("passes complete IELTS task context and enforces task-two weighting", async () => {
+    const ieltsResult = {
+      kind: "IELTS", task1Band: 6, task2Band: 7, overallBand: 9,
+      task1Criteria: { taskAchievement: 6, coherenceCohesion: 6, lexicalResource: 6, grammaticalRangeAccuracy: 6, feedback: ["Clear overview"] },
+      task2Criteria: { taskAchievement: 7, coherenceCohesion: 7, lexicalResource: 7, grammaticalRangeAccuracy: 7, feedback: ["Supported position"] },
+      strengths: ["Clear organization"], weaknesses: ["Some imprecision"], improvementSuggestions: ["Use more exact comparisons"]
+    };
+    const fetcher = vi.fn<typeof fetch>(() => Promise.resolve(Response.json({ success: true, result: { response: JSON.stringify(ieltsResult) }, errors: [] })));
+    const provider = new CloudflareWorkersAIProvider("account-b", "secret-token", "@cf/meta/model", fetcher);
+    const response = await provider.evaluateWriting({ ...writingInput, text: "Question 1:\nAnswer one\n\nQuestion 2:\nAnswer two", context: { mode: "IELTS", examType: "IELTS", examVariant: "IELTS_ACADEMIC", tasks: [{ questionNumber: 1, taskType: "IELTS_ACADEMIC_TASK_1", prompt: "Describe the chart.", visualDescription: "Values are 10 and 20.", wordMinimum: 150 }, { questionNumber: 2, taskType: "IELTS_TASK_2", prompt: "Discuss both views.", wordMinimum: 250 }] } });
+    expect(response.result).toMatchObject({ kind: "IELTS", overallBand: 6.5 });
+    const requestBody = fetcher.mock.calls[0]?.[1]?.body;
+    expect(typeof requestBody).toBe("string");
+    const parsedBody: unknown = JSON.parse(typeof requestBody === "string" ? requestBody : "null");
+    const body = z.object({ max_tokens: z.number(), messages: z.array(z.object({ content: z.string() })) }).parse(parsedBody);
+    expect(body.max_tokens).toBe(2400);
+    expect(body.messages).toHaveLength(2);
+    expect(body.messages[1]?.content).toContain("Describe the chart.");
+    expect(body.messages[1]?.content).toContain("Values are 10 and 20.");
   });
 });

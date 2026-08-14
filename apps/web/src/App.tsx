@@ -3,6 +3,7 @@ import { api, API_ORIGIN, RequestError } from "./api";
 import { AdminUsage } from "./components/AdminUsage";
 import { EvaluationResult } from "./components/EvaluationResult";
 import { Header } from "./components/Header";
+import { PracticeStudio } from "./components/PracticeStudio";
 import { localeLabels, localizeApiError, resolveLocale, translate } from "./i18n";
 import type { CefrLevel, EvaluationResponse, Locale, User } from "./types";
 
@@ -21,6 +22,7 @@ export function App() {
   const [error, setError] = useState<{ code: string; message: string; requestId: string | undefined } | null>(null);
   const [evaluationRequestId, setEvaluationRequestId] = useState<string | null>(null);
   const [maximumWords, setMaximumWords] = useState(1000);
+  const [workspaceMode, setWorkspaceMode] = useState<"checker" | "topic" | "exam">("checker");
   const words = useMemo(() => countWords(text), [text]);
   const t = (key: Parameters<typeof translate>[1]) => translate(locale, key);
 
@@ -60,7 +62,9 @@ export function App() {
       ? user?.isAdmin ? <AdminUsage locale={locale} currentUserId={user.id}/> : <main className="center-state">{authLoading ? t("loading") : "403"}</main>
       : <main>
         <section className="hero"><div><p className="eyebrow">{t("product")}</p><h1>{t("title")}</h1><p className="hero-copy">{t("subtitle")}</p><p className="system-status"><span/> {t("connected")}</p></div><div className="hero-visual" aria-hidden="true"><span className="orbit orbit-one"/><span className="orbit orbit-two"/><strong>CEFR</strong><small>A1 · A2 · B1 · B2 · C1 · C2</small></div></section>
-        <section className="workspace" aria-labelledby="writing-heading">
+        <div className="mode-grid"><button type="button" aria-pressed={workspaceMode === "checker"} className={workspaceMode === "checker" ? "active" : ""} onClick={() => setWorkspaceMode("checker")}>Writing Checker</button><button type="button" aria-pressed={workspaceMode === "topic"} className={workspaceMode === "topic" ? "active" : ""} onClick={() => setWorkspaceMode("topic")}>Writing Practice</button><button type="button" aria-pressed={workspaceMode === "exam"} className={workspaceMode === "exam" ? "active" : ""} onClick={() => setWorkspaceMode("exam")}>Exam Practice</button></div>
+        {workspaceMode !== "checker" && <PracticeStudio key={workspaceMode} locale={locale} user={user} mode={workspaceMode} maximumWords={maximumWords}/>}
+        {workspaceMode === "checker" && <section className="workspace" aria-labelledby="writing-heading">
           <div className="mode-grid"><button type="button" aria-pressed={mode === "estimate"} className={mode === "estimate" ? "active" : ""} onClick={() => { setMode("estimate"); resetDraftState(); }}><span>01</span><strong>{t("estimate")}</strong><small>{t("estimateDesc")}</small></button><button type="button" aria-pressed={mode === "targeted"} className={mode === "targeted" ? "active" : ""} onClick={() => { setMode("targeted"); resetDraftState(); }}><span>02</span><strong>{t("targeted")}</strong><small>{t("targetedDesc")}</small></button></div>
           {mode === "targeted" && <fieldset className="target-selector"><legend>{t("targetLevel")}</legend><div>{levels.map((level) => <button type="button" aria-pressed={targetLevel === level} className={targetLevel === level ? "active" : ""} key={level} onClick={() => { setTargetLevel(level); resetDraftState(); }}>{level}</button>)}</div></fieldset>}
           {!authLoading && !user && <div className="signin-panel"><div><span className="panel-icon">↗</span><div><h3>{t("signInTitle")}</h3><p>{t("signInCopy")}</p></div></div><a className="primary-button" href={`${API_ORIGIN}/auth/google`}>{t("signIn")}</a></div>}
@@ -72,8 +76,8 @@ export function App() {
           </form>
           {submitting && <div className="analysis-status"><span className="pulse-dot"/><p>{t("checking")}</p><i/></div>}
           {error && <div className="error-banner" role="alert"><div><strong>{error.code}</strong><p>{error.message}</p>{error.requestId && <small>{t("reference")}: {error.requestId}</small>}</div><button type="button" aria-label={t("retry")} onClick={() => { void submit(); }}>↻</button></div>}
-        </section>
-        {result?.evaluation && <EvaluationResult result={result.evaluation} locale={locale}/>}
+        </section>}
+        {workspaceMode === "checker" && result?.evaluation && <EvaluationResult result={result.evaluation} locale={locale}/>}
       </main>}
     <footer><span>© {new Date().getFullYear()} me2write</span><span>{localeLabels[locale]} · Independent from me2talk</span></footer>
   </div>;

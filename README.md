@@ -113,7 +113,7 @@ The flow uses authorization code + PKCE, signed/expiring state, an `HttpOnly` co
 
 ## Neon
 
-Create a separate Neon project/database or, at minimum, a dedicated database/schema and credentials for me2write. The API uses parameterized PostgreSQL queries through `@neondatabase/serverless`. Tables are `users`, `sessions`, `writing_evaluations`, `llm_usage`, and `admin_user_actions`.
+Create a separate Neon project/database or, at minimum, a dedicated database/schema and credentials for me2write. The API uses parameterized PostgreSQL queries through `@neondatabase/serverless`. Tables are `users`, `sessions`, `practice_sessions`, `writing_evaluations`, `llm_usage`, and `admin_user_actions`. Apply all numbered migrations before deploying the practice endpoints. New features must use a new numbered SQL migration; do not modify an already-released migration.
 
 The evaluation claim is atomic and `request_id` is unique. A browser retry can return the already-completed result without paying for another inference. Processing and failed duplicate requests return controlled conflicts. The schema also records evaluation mode, requested target level, feedback language, per-user suspension state, and an append-only admin action trail.
 

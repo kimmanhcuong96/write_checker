@@ -21,6 +21,11 @@ export type Evaluation = {
 };
 
 export type EvaluationResponse = { id: string; status: "processing" | "completed" | "failed"; evaluation: Evaluation | null };
+export type PracticeTask = { id: string; questionNumber: number; taskType: string; prompt: string; wordMinimum?: number; recommendedSeconds?: number; visualDescription?: string; visualAsset?: string; providedWords?: [string, string] };
+export type IeltsCriteria = { taskAchievement: number; coherenceCohesion: number; lexicalResource: number; grammaticalRangeAccuracy: number; feedback: string[] };
+export type IeltsEvaluation = { kind: "IELTS"; overallBand: number; task1Band: number; task2Band: number; task1Criteria: IeltsCriteria; task2Criteria: IeltsCriteria; strengths: string[]; weaknesses: string[]; improvementSuggestions: string[] };
+export type ToeicEvaluation = { kind: "TOEIC"; estimatedScore: number; questionFeedback: Array<{ questionNumber: number; feedback: string }>; strengths: string[]; weaknesses: string[]; improvementSuggestions: string[] };
+export type PracticeEvaluation = Evaluation | IeltsEvaluation | ToeicEvaluation;
 export type ApiError = { error: { code: string; message: string; requestId?: string } };
 
 export type UsageDashboard = {
