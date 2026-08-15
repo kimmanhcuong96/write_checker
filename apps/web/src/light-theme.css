@@ -322,5 +322,20 @@ th, td { padding: 12px; }
   .practice-random-row, .random-topic-button { width: 100%; }
   .auth-dialog { padding: 24px 20px 20px; }
   .auth-dialog-actions { flex-direction: column-reverse; }
-  .auth-dialog-actions button { width: 100%; }
+.auth-dialog-actions button { width: 100%; }
+}
+
+@media (max-width: 700px) {
+  .site-header { min-height: 64px; align-items: center; gap: 12px; }
+  .site-header nav { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
+  .primary-links { display: none; }
+  .language-select-trigger { height: 44px; padding-inline: 10px; }
+  .site-footer { padding-block: 28px 32px; margin-top: 48px; }
+  .site-footer nav { width: 100%; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px 20px; }
+  .site-footer nav > div { min-width: 0; }
+  .site-footer a { display: flex; width: auto; min-height: 44px; align-items: center; }
+}
+
+@media (max-width: 430px) {
+  .site-footer nav { grid-template-columns: 1fr; }
 }
