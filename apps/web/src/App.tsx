@@ -101,7 +101,7 @@ export function App() {
   const persistLocaleAndSetLocale = (next: Locale) => { persistLocale(next); setLocale(next); };
   const featureHref = (feature: WorkspaceMode) => feature === "checker" ? "/#writing-checker" : feature === "topic" ? "/#writing-practice" : "/#exam-practice";
   return <div className="app-shell">
-    <Header user={user} locale={locale} onLocaleChange={persistLocaleAndSetLocale} onLogout={() => { void logout(); }}/>
+    <Header user={user} locale={locale} onLocaleChange={persistLocaleAndSetLocale} onLogout={() => { void logout(); }} onSignIn={startAuthentication}/>
     {sitePath === "/admin"
       ? user?.isAdmin ? <AdminUsage locale={locale} currentUserId={user.id}/> : <main className="center-state">{authLoading ? t("loading") : "403"}</main>
       : sitePath === "/about" || sitePath === "/contact" || sitePath === "/privacy"
@@ -123,8 +123,8 @@ export function App() {
           {user?.isBlocked && <div className="blocked-banner">⊘ {t("blocked")}{user.blockedUntil && !user.permanentlyBlocked ? ` · ${new Intl.DateTimeFormat(locale, { dateStyle:"medium" }).format(new Date(user.blockedUntil))}` : ""}</div>}
           <form onSubmit={(event) => { event.preventDefault(); void submit(); }}>
             <div className="workspace-heading"><div><p className="eyebrow">{t("draft")}</p><h2 id="writing-heading">{t("draftTitle")}</h2></div><span className={words > maximumWords ? "word-count over" : "word-count"}>{words} / {maximumWords}</span></div>
-            <label className="sr-only" htmlFor="writing-input">{t("draftTitle")}</label><textarea id="writing-input" value={text} onChange={(event) => { setText(event.target.value); resetDraftState(); }} disabled={submitting} placeholder={t("placeholder")} aria-invalid={words > maximumWords}/>
-            <div className="form-footer"><p>{t("helper")}</p><button className="primary-button" type="submit" disabled={user?.isBlocked || submitting || words === 0 || words > maximumWords}>{submitting ? <><span className="spinner"/> {t("checking")}</> : <>{t("check")} <span>→</span></>}</button></div>
+            <label className="sr-only" htmlFor="writing-input">{t("draftTitle")}</label><textarea id="writing-input" value={text} onChange={(event) => { setText(event.target.value); resetDraftState(); }} disabled={Boolean(user && submitting)} placeholder={t("placeholder")} aria-invalid={words > maximumWords}/>
+            <div className="form-footer"><p>{t("helper")}</p><button className="primary-button" type="submit" disabled={user?.isBlocked || Boolean(user && submitting) || words === 0 || words > maximumWords}>{submitting && user ? <><span className="spinner"/> {t("checking")}</> : <>{t("check")} <span>→</span></>}</button></div>
           </form>
           {submitting && <div className="analysis-status"><span className="pulse-dot"/><p>{t("checking")}</p><i/></div>}
           {error && <div className="error-banner" role="alert"><div><strong>{error.code}</strong><p>{error.message}</p>{error.requestId && <small>{t("reference")}: {error.requestId}</small>}</div><button type="button" aria-label={t("retry")} onClick={() => { void submit(); }}>↻</button></div>}

@@ -3,8 +3,8 @@ import { getContent } from "../content-i18n";
 import { translate } from "../i18n";
 import { LanguageSelect } from "./LanguageSelect";
 
-export function Header({ user, locale, onLocaleChange, onLogout }: {
-  user: User | null; locale: Locale; onLocaleChange: (locale: Locale) => void; onLogout: () => void;
+export function Header({ user, locale, onLocaleChange, onLogout, onSignIn }: {
+  user: User | null; locale: Locale; onLocaleChange: (locale: Locale) => void; onLogout: () => void; onSignIn: () => void;
 }) {
   const t = (key: Parameters<typeof translate>[1]) => translate(locale, key);
   const copy = getContent(locale).navigation;
@@ -13,6 +13,7 @@ export function Header({ user, locale, onLocaleChange, onLogout }: {
     <nav aria-label={copy.primaryLabel}>
       <div className="primary-links"><a className="nav-link" href="/">{copy.home}</a><a className="nav-link" href="/#features">{copy.features}</a><a className="nav-link" href="/about">{copy.about}</a><a className="nav-link" href="/contact">{copy.contact}</a></div>
       <LanguageSelect locale={locale} onChange={onLocaleChange}/>
+      {!user && <button className="header-signin" type="button" onClick={onSignIn}>{t("signIn")}</button>}
       {user && <details className="user-menu"><summary><Avatar user={user}/><span><b>{user.displayName ?? user.email ?? t("account")}</b><small>{user.isAdmin ? t("administrator") : t("member")}</small></span><i>⌄</i></summary>
         <div className="user-popover">
           <div className="user-identity"><Avatar user={user}/><div><strong>{user.displayName ?? t("account")}</strong><span>{user.email}</span></div></div>
