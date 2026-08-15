@@ -26,6 +26,7 @@ export function PracticeStudio({ locale, user, mode, maximumWords, onRequireAuth
   const [startedAt, setStartedAt] = useState<number | null>(null);
   const [sessionLimitSeconds, setSessionLimitSeconds] = useState<number | null>(null);
   const [remaining, setRemaining] = useState<number | null>(null);
+  const [timerStopped, setTimerStopped] = useState(false);
   const [expired, setExpired] = useState(false);
   const [current, setCurrent] = useState(0);
   const [answers, setAnswers] = useState<string[]>([]);
@@ -43,14 +44,14 @@ export function PracticeStudio({ locale, user, mode, maximumWords, onRequireAuth
   }, [mode, p.loadError]);
 
   useEffect(() => {
-    if (!startedAt || sessionLimitSeconds === null || expired) return;
+    if (!startedAt || sessionLimitSeconds === null || expired || timerStopped || evaluation !== null) return;
     const timer = window.setInterval(() => {
       const next = Math.max(0, sessionLimitSeconds - Math.floor((Date.now() - startedAt) / 1000));
       setRemaining(next);
       if (next === 0) setExpired(true);
     }, 250);
     return () => window.clearInterval(timer);
-  }, [startedAt, sessionLimitSeconds, expired]);
+  }, [startedAt, sessionLimitSeconds, expired, timerStopped, evaluation]);
 
   const availableTopics = useMemo(() => topics.filter((item) => item.category === category && item.active), [topics, category]);
   const activeTask = examTasks[current];
@@ -75,6 +76,7 @@ export function PracticeStudio({ locale, user, mode, maximumWords, onRequireAuth
       setStartedAt(stamp);
       setSessionLimitSeconds(session.timeLimitSeconds);
       setRemaining(nextRemaining);
+      setTimerStopped(false);
       setExpired(session.status === "TIME_EXPIRED" || nextRemaining === 0);
       setExamTasks(mode === "exam" ? session.tasks : []);
       setCurrent(0);
@@ -107,6 +109,10 @@ export function PracticeStudio({ locale, user, mode, maximumWords, onRequireAuth
   const submit = async () => {
     if (!user) { onRequireAuth(); return; }
     if (!sessionId || !startedAt || submitting || answersInvalid) return;
+    const submissionRemaining = sessionLimitSeconds === null ? null : Math.max(0, sessionLimitSeconds - Math.floor((Date.now() - startedAt) / 1000));
+    setRemaining(submissionRemaining);
+    setExpired(submissionRemaining === 0);
+    setTimerStopped(true);
     setSubmitting(true);
     setMessage("");
     try {
@@ -124,6 +130,7 @@ export function PracticeStudio({ locale, user, mode, maximumWords, onRequireAuth
     setStartedAt(null);
     setSessionLimitSeconds(null);
     setRemaining(null);
+    setTimerStopped(false);
     setExpired(false);
     setCurrent(0);
     setAnswers([]);
