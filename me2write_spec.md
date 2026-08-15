@@ -1643,6 +1643,7 @@ Deployment credentials and external resources (Google OAuth client, Neon databas
 - Kept the existing product colors and background while aligning the frontend with the me2talk visual system's Inter-first typography, 36–48px page headings, 18–24px section headings, 14–16px body text, readable metadata sizing, centered max-width containers, responsive page padding, moderate control/card radii, and consistent touch-target sizing.
 - Applied the layout scale across the public pages, checker, practice and exam workspaces, result views, navigation, footer, and admin/data views without changing application behavior.
 - Centered all secondary-page containers, including Privacy and 404, and widened long-form information content while keeping readable line lengths.
+- Allowed unauthenticated users to click evaluation actions and receive a localized sign-in dialog; preserve the active feature, mode, target level, and draft in session storage through Google OAuth, then restore the workspace after authentication.
 
 ### 2026-08-14 — Public site UI and SEO structure
 
