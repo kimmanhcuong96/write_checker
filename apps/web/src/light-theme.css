@@ -262,18 +262,19 @@ th, td { padding: 12px; }
 
 .not-found { width: min(1024px, 100%); margin-inline: auto; justify-items: center; text-align: center; }
 
-.language-select { position: relative; width: 214px; flex: 0 0 auto; color: #f6f8fa; }
-.language-select-trigger { display: flex; width: 100%; height: 48px; align-items: center; gap: 10px; border: 1px solid rgba(255,255,255,.1); border-radius: 6px; background: #1d2633; color: #f6f8fa; padding: 0 12px; cursor: pointer; font-size: .875rem; text-align: left; }
-.language-select-trigger:focus-visible { border-color: #45d483; outline: 2px solid rgba(69,212,131,.35); outline-offset: 2px; }
+.language-select { position: relative; width: 214px; flex: 0 0 auto; color: #17221d; }
+.language-select-trigger { display: flex; width: 100%; height: 48px; align-items: center; gap: 10px; border: 1px solid #cbd8d0; border-radius: 6px; background: #fff; color: #17221d; padding: 0 12px; cursor: pointer; font-size: .875rem; text-align: left; box-shadow: 0 1px 2px rgba(28,54,41,.04); }
+.language-select-trigger:hover { border-color: #91ad9c; background: #fbfdfb; }
+.language-select-trigger:focus-visible { border-color: #137a4a; outline: 2px solid rgba(19,122,74,.22); outline-offset: 2px; }
 .language-flag { display: inline-grid; width: 24px; height: 16px; flex: 0 0 24px; place-items: center; font-family: "Segoe UI Emoji", "Apple Color Emoji", sans-serif !important; font-size: 16px; line-height: 16px; }
 .language-select-name { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.language-chevron { width: 16px; height: 16px; flex: 0 0 16px; color: rgba(246,248,250,.7); transition: transform .18s ease; }
+.language-chevron { width: 16px; height: 16px; flex: 0 0 16px; color: #607068; transition: transform .18s ease; }
 .language-select.open .language-chevron { transform: rotate(180deg); }
-.language-select-menu { position: absolute; top: calc(100% + 8px); right: 0; z-index: 50; width: 100%; overflow: hidden; border: 1px solid rgba(255,255,255,.1); border-radius: 6px; background: #101c28; padding: 4px; box-shadow: 0 18px 40px rgba(0,0,0,.28); }
-.language-option { display: flex; width: 100%; min-height: 44px; align-items: center; gap: 10px; border: 0; border-radius: 4px; background: transparent; color: rgba(246,248,250,.78); padding: 0 10px; cursor: pointer; font-size: .875rem; text-align: left; }
-.language-option:hover, .language-option:focus-visible { background: rgba(255,255,255,.06); color: #f6f8fa; outline: none; }
-.language-option.selected { background: rgba(69,212,131,.15); color: #45d483; font-weight: 600; }
-.language-check { width: 16px; height: 16px; margin-left: auto; color: #45d483; }
+.language-select-menu { position: absolute; top: calc(100% + 8px); right: 0; z-index: 50; width: 100%; overflow: hidden; border: 1px solid #cbd8d0; border-radius: 6px; background: #fff; padding: 4px; box-shadow: 0 18px 40px rgba(28,54,41,.14); }
+.language-option { display: flex; width: 100%; min-height: 44px; align-items: center; gap: 10px; border: 0; border-radius: 4px; background: transparent; color: #43544b; padding: 0 10px; cursor: pointer; font-size: .875rem; text-align: left; }
+.language-option:hover, .language-option:focus-visible { background: #eef4f0; color: #17221d; outline: none; }
+.language-option.selected { background: #eaf6ee; color: #137a4a; font-weight: 600; }
+.language-check { width: 16px; height: 16px; margin-left: auto; color: #137a4a; }
 
 @media (max-width: 700px) {
   .site-header nav { flex: 1; min-width: 0; }
