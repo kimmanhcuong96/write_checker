@@ -31,12 +31,19 @@ const reviewLabels: Record<Locale, Record<ReviewKey | "connected", string>> = {
   ja: { connected: "評価ワークスペースの準備完了", retry: "評価を再試行", reportTimeZone: "レポートのタイムゾーン", expires: "期限", currentReason: "理由", successFailed: "成功 / 失敗", currentRestriction: "現在の制限" }
 };
 export type TranslationKey = Key | ReviewKey;
-export const translate = (locale: Locale, key: TranslationKey): string => {
+export type TranslationValues = Record<string, string | number>;
+const translationFor = (locale: Locale, key: TranslationKey): string | undefined => {
   if (key in reviewLabels[locale]) return reviewLabels[locale][key as ReviewKey | "connected"];
-  return key === "previous" || key === "nextPage" ? paginationLabels[locale][key] : dictionaries[locale][key as Key];
+  if (key === "previous" || key === "nextPage") return paginationLabels[locale][key];
+  return dictionaries[locale][key as Key] ?? dictionaries.en[key as Key];
+};
+export const translate = (locale: Locale, key: TranslationKey, values: TranslationValues = {}): string => {
+  const template = translationFor(locale, key) ?? translationFor("en", key) ?? key;
+  return template.replace(/\{([a-zA-Z][a-zA-Z0-9_]*)\}/gu, (placeholder, name: string) => name in values ? String(values[name]) : placeholder);
 };
 export const localeLabels: Record<Locale, string> = { en: "English", vi: "Tiếng Việt", zh: "中文", ja: "日本語" };
-export const localeFlags: Record<Locale, string> = { en: "EN", vi: "VI", zh: "中", ja: "日" };
+export const localeFlags: Record<Locale, string> = { en: "🇺🇸", vi: "🇻🇳", zh: "🇨🇳", ja: "🇯🇵" };
+export const localeOptions: Locale[] = ["en", "vi", "zh", "ja"];
 const apiErrorMessages: Record<Locale, Record<string, string>> = {
   en: {
     AUTH_REQUIRED: "Please sign in again.", USER_BLOCKED: "This account cannot submit evaluations.",
@@ -73,12 +80,34 @@ const apiErrorMessages: Record<Locale, Record<string, string>> = {
 };
 export const localizeApiError = (locale: Locale, code: string, fallback: string): string =>
   apiErrorMessages[locale][code] ?? fallback;
+
+const LANGUAGE_STORAGE_KEY = "me2write:language";
+const supportedLocale = (value: string | null | undefined): Locale | null =>
+  value === "en" || value === "vi" || value === "zh" || value === "ja" ? value : null;
+const localeFromLanguage = (value: string | null | undefined): Locale | null => {
+  const base = value?.toLowerCase().split("-")[0];
+  return supportedLocale(base);
+};
+const localeFromTimezone = (value: string | undefined): Locale | null => {
+  if (!value) return null;
+  if (value.includes("Ho_Chi_Minh") || value.includes("Saigon")) return "vi";
+  if (value.includes("Tokyo")) return "ja";
+  if (value.includes("Shanghai") || value.includes("Chongqing") || value.includes("Hong_Kong") || value.includes("Taipei")) return "zh";
+  return null;
+};
 export const resolveLocale = (): Locale => {
-  const saved = window.localStorage.getItem("me2write_locale");
-  if (saved === "en" || saved === "vi" || saved === "zh" || saved === "ja") return saved;
-  for (const language of navigator.languages.length ? navigator.languages : [navigator.language]) {
-    const base = language.toLowerCase().split("-")[0];
-    if (base === "vi" || base === "zh" || base === "ja" || base === "en") return base;
+  const stored = localeFromLanguage(window.localStorage.getItem(LANGUAGE_STORAGE_KEY));
+  if (stored) return stored;
+  const language = localeFromLanguage(navigator.language);
+  if (language) return language;
+  for (const candidate of navigator.languages) {
+    const detected = localeFromLanguage(candidate);
+    if (detected) return detected;
   }
+  const timezone = localeFromTimezone(Intl.DateTimeFormat().resolvedOptions().timeZone);
+  if (timezone) return timezone;
   return "en";
+};
+export const persistLocale = (locale: Locale): void => {
+  window.localStorage.setItem(LANGUAGE_STORAGE_KEY, locale);
 };

@@ -7,7 +7,7 @@ import { Header } from "./components/Header";
 import { PracticeStudio } from "./components/PracticeStudio";
 import { PublicPage } from "./components/PublicPage";
 import { SiteFooter } from "./components/SiteFooter";
-import { localizeApiError, resolveLocale, translate } from "./i18n";
+import { localizeApiError, persistLocale, resolveLocale, translate } from "./i18n";
 import { applyPageMetadata, resolveSitePath } from "./site";
 import type { CefrLevel, EvaluationResponse, Locale, User } from "./types";
 
@@ -36,7 +36,7 @@ export function App() {
 
   useEffect(() => {
     document.documentElement.lang = locale;
-    window.localStorage.setItem("me2write_locale", locale);
+    persistLocale(locale);
     applyPageMetadata(sitePath, locale);
   }, [locale, sitePath]);
   useEffect(() => {
@@ -77,9 +77,10 @@ export function App() {
     } finally { setSubmitting(false); }
   };
 
+  const persistLocaleAndSetLocale = (next: Locale) => { persistLocale(next); setLocale(next); };
   const featureHref = (feature: WorkspaceMode) => feature === "checker" ? "/#writing-checker" : feature === "topic" ? "/#writing-practice" : "/#exam-practice";
   return <div className="app-shell">
-    <Header user={user} locale={locale} onLocaleChange={setLocale} onLogout={() => { void logout(); }}/>
+    <Header user={user} locale={locale} onLocaleChange={persistLocaleAndSetLocale} onLogout={() => { void logout(); }}/>
     {sitePath === "/admin"
       ? user?.isAdmin ? <AdminUsage locale={locale} currentUserId={user.id}/> : <main className="center-state">{authLoading ? t("loading") : "403"}</main>
       : sitePath === "/about" || sitePath === "/contact" || sitePath === "/privacy"
