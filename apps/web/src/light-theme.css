@@ -231,6 +231,7 @@ textarea { min-height: 300px; padding: 16px; font-size: 1rem; line-height: 1.625
 .primary-button, .secondary-button, .practice-controls button, .question-nav button, .form-footer button:not(.primary-button) { min-height: 40px; padding: 0 16px; border-radius: 6px; font-size: .875rem; }
 .practice-studio > .primary-button { margin-top: 16px; }
 .practice-studio .form-footer > div { display: flex; flex-wrap: wrap; gap: 8px; }
+.practice-studio .question-nav button:disabled, .practice-studio .form-footer button:disabled { cursor: not-allowed; opacity: .5; }
 .prompt-card { margin-block: 16px; padding: 20px; border-radius: 8px; }
 .prompt-card p, .practice-message { font-size: 1rem; line-height: 1.625; }
 .content-page { padding-block: 32px 24px; }
