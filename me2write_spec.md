@@ -1638,6 +1638,11 @@ Deployment credentials and external resources (Google OAuth client, Neon databas
 
 ## 49.3 Implementation change log
 
+### 2026-08-15 — Ecosystem typography and layout alignment
+
+- Kept the existing product colors and background while aligning the frontend with the me2talk visual system's Inter-first typography, 36–48px page headings, 18–24px section headings, 14–16px body text, readable metadata sizing, centered max-width containers, responsive page padding, moderate control/card radii, and consistent touch-target sizing.
+- Applied the layout scale across the public pages, checker, practice and exam workspaces, result views, navigation, footer, and admin/data views without changing application behavior.
+
 ### 2026-08-14 — Public site UI and SEO structure
 
 - Reworked the existing visual tokens into a light, readable theme without changing writing evaluation behavior.

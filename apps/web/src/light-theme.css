@@ -179,3 +179,82 @@ th, td { border-color: #e0e7e3; }
   .locale-control { width: 148px; }
   .site-footer nav { grid-template-columns: 1fr; }
 }
+
+/* Ecosystem typography and layout scale. Keep the existing product palette above. */
+:root, body, button, input, textarea, select { font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important; }
+.app-shell *:not(code) { font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important; }
+body { line-height: 1.5; }
+.app-shell { width: 100%; max-width: 1280px; padding-inline: 16px; }
+.site-header { min-height: 64px; }
+.brand-mark { width: 40px; height: 40px; }
+.brand b { font-size: 1rem; font-weight: 600; }
+.brand small { font-size: .6875rem; letter-spacing: .12em; }
+.nav-link { padding: 9px 10px; font-size: .875rem; font-weight: 500; }
+.locale-control { height: 44px; }
+.locale-control .locale-label, .locale-control select { font-size: .875rem; }
+.hero { min-height: 360px; gap: 56px; padding-block: 48px 40px; }
+.hero h1, .content-page h1, .not-found h1, .admin-hero h1 { font-family: inherit !important; font-size: clamp(2.25rem, 5vw, 3rem); font-weight: 600; line-height: 1.15; letter-spacing: -.03em; }
+.hero-copy { font-size: 1rem; line-height: 1.625; }
+.eyebrow { font-family: inherit !important; font-size: .75rem; font-weight: 600; letter-spacing: .12em; }
+.feature-navigation { gap: 16px; margin-bottom: 32px; }
+.feature-navigation > section { border-radius: 8px; }
+.feature-navigation a { padding: 20px; border-radius: 7px; }
+.feature-navigation h2 { font-size: 1.125rem; font-weight: 600; line-height: 1.3; }
+.feature-navigation p { margin-top: 8px; font-size: .875rem; line-height: 1.5; }
+.workspace { border-radius: 8px; padding: 24px; }
+.mode-grid, .feedback-grid { gap: 16px; }
+.mode-grid button { border-radius: 6px; padding: 16px; }
+.mode-grid strong { font-size: 1rem; font-weight: 600; }
+.mode-grid small { font-size: .875rem; line-height: 1.5; }
+.workspace-heading { margin-block: 20px 16px; }
+.workspace-heading h2 { font-family: inherit !important; font-size: 1.25rem; font-weight: 600; line-height: 1.25; }
+.practice-controls { gap: 16px; margin-bottom: 20px; }
+.practice-controls label, .target-selector legend, .target-selector label { font-size: .875rem; font-weight: 500; }
+.practice-controls select, textarea, .panel-toolbar input, .modal input { font-size: 1rem; }
+.practice-controls select { min-height: 44px; padding: 10px 12px; }
+textarea { min-height: 300px; padding: 16px; font-size: 1rem; line-height: 1.625; }
+.primary-button, .secondary-button, .practice-controls button, .question-nav button, .form-footer button:not(.primary-button) { min-height: 40px; padding: 0 16px; border-radius: 6px; font-size: .875rem; }
+.prompt-card { margin-block: 16px; padding: 20px; border-radius: 8px; }
+.prompt-card p, .practice-message { font-size: 1rem; line-height: 1.625; }
+.content-page { padding-block: 32px 24px; }
+.content-page article { width: min(1024px, 100%); }
+.content-page h1, .not-found h1 { max-width: 900px; }
+.page-intro, .content-page section p { font-size: 1rem; line-height: 1.75; }
+.content-page h2 { font-size: 1.375rem; font-weight: 600; line-height: 1.25; }
+.contact-card { padding: 24px !important; border-radius: 8px; }
+.site-footer { padding-block: 32px 40px; margin-top: 64px; }
+.site-footer h2 { font-size: .75rem; font-weight: 600; }
+.site-footer a { font-size: .875rem; }
+.admin-page { padding-block: 32px; }
+.admin-hero h1 { font-size: clamp(2.25rem, 5vw, 3rem); }
+.admin-tabs button, .segmented button { min-height: 40px; padding-inline: 16px; font-size: .875rem; }
+.usage-grid { gap: 16px; margin-top: 24px; }
+.usage-card, .data-panel { border-radius: 8px; }
+.usage-card { padding: 20px; }
+.usage-card > strong { font-family: inherit !important; font-size: 2rem; font-weight: 600; }
+.data-panel { padding: 24px; }
+.data-panel h2 { font-family: inherit !important; font-size: 1.125rem; font-weight: 600; }
+table { font-size: .875rem; }
+th { font-size: .75rem; font-weight: 600; }
+th, td { padding: 12px; }
+.table-user strong { font-size: .875rem; }
+.table-user small, .status-pill, .manage-button, .pagination span { font-size: .75rem; }
+.manage-button { min-height: 36px; padding-inline: 12px; }
+.modal { border-radius: 8px; padding: 24px; }
+.modal-title h2 { font-family: inherit !important; font-size: 1.25rem; font-weight: 600; }
+.modal > label, .form-error { font-size: .875rem; }
+
+@media (min-width: 640px) {
+  .app-shell { padding-inline: 24px; }
+}
+
+@media (min-width: 1024px) {
+  .app-shell { padding-inline: 32px; }
+}
+
+@media (max-width: 700px) {
+  .app-shell { padding-inline: 16px; }
+  .hero { padding-block: 36px 32px; }
+  .workspace { padding: 20px; }
+  .content-page { padding-top: 32px; }
+}
