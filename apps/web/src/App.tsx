@@ -9,7 +9,7 @@ import { PracticeStudio } from "./components/PracticeStudio";
 import { PublicPage } from "./components/PublicPage";
 import { SiteFooter } from "./components/SiteFooter";
 import { localizeApiError, persistLocale, resolveLocale, translate } from "./i18n";
-import { applyPageMetadata, resolveSitePath } from "./site";
+import { applyPageMetadata, resolveSitePath, type SitePath } from "./site";
 import type { CefrLevel, EvaluationResponse, Locale, User } from "./types";
 
 const levels: CefrLevel[] = ["A1", "A2", "B1", "B2", "C1", "C2"];
@@ -30,7 +30,7 @@ const readPendingEvaluation = (): PendingEvaluation | null => {
 };
 
 export function App() {
-  const sitePath = resolveSitePath(window.location.pathname);
+  const [sitePath, setSitePath] = useState<SitePath>(() => resolveSitePath(window.location.pathname));
   const [restoredDraft] = useState<PendingEvaluation | null>(readPendingEvaluation);
   const [locale, setLocale] = useState<Locale>(resolveLocale);
   const [user, setUser] = useState<User | null>(null);
@@ -55,6 +55,11 @@ export function App() {
     applyPageMetadata(sitePath, locale);
   }, [locale, sitePath]);
   useEffect(() => {
+    const syncRoute = () => setSitePath(resolveSitePath(window.location.pathname));
+    window.addEventListener("popstate", syncRoute);
+    return () => window.removeEventListener("popstate", syncRoute);
+  }, []);
+  useEffect(() => {
     if (sitePath === "/about" || sitePath === "/contact" || sitePath === "/privacy" || sitePath === "/404") {
       setAuthLoading(false);
       return;
@@ -75,6 +80,7 @@ export function App() {
     if (window.location.hash && legacyWorkspace) {
       const cleanPath = legacyWorkspace === "checker" ? "/writing-checker" : legacyWorkspace === "topic" ? "/writing-practice" : "/exam-practice";
       window.history.replaceState(null, "", cleanPath);
+      setSitePath(resolveSitePath(cleanPath));
       setWorkspaceMode(legacyWorkspace);
       return;
     }
@@ -113,21 +119,30 @@ export function App() {
     window.location.href = `${API_ORIGIN}/auth/google`;
   };
   const persistLocaleAndSetLocale = (next: Locale) => { persistLocale(next); setLocale(next); };
+  const navigate = (path: string) => {
+    const nextPath = resolveSitePath(path);
+    if (nextPath === sitePath && window.location.pathname === path) return;
+    window.history.pushState(null, "", path);
+    setSitePath(nextPath);
+    const nextWorkspace = workspaceFromLocation(path);
+    if (nextWorkspace) setWorkspaceMode(nextWorkspace);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
   const featureHref = (feature: WorkspaceMode) => feature === "checker" ? "/writing-checker" : feature === "topic" ? "/writing-practice" : "/exam-practice";
   return <div className="app-shell">
-    <Header user={user} locale={locale} onLocaleChange={persistLocaleAndSetLocale} onLogout={() => { void logout(); }} onSignIn={startAuthentication}/>
+    <Header user={user} locale={locale} onLocaleChange={persistLocaleAndSetLocale} onLogout={() => { void logout(); }} onSignIn={startAuthentication} onNavigate={navigate}/>
     {sitePath === "/admin"
       ? user?.isAdmin ? <AdminUsage locale={locale} currentUserId={user.id}/> : <main className="center-state">{authLoading ? t("loading") : "403"}</main>
       : sitePath === "/about" || sitePath === "/contact" || sitePath === "/privacy"
-        ? <PublicPage path={sitePath} locale={locale}/>
+        ? <PublicPage path={sitePath} locale={locale} onNavigate={navigate}/>
         : sitePath === "/404"
-          ? <main className="not-found"><p className="eyebrow">404</p><h1>{content.notFound.title}</h1><p>{content.notFound.description}</p><a className="primary-button" href="/">{content.notFound.action}</a></main>
+          ? <main className="not-found"><p className="eyebrow">404</p><h1>{content.notFound.title}</h1><p>{content.notFound.description}</p><a className="primary-button" href="/" onClick={(event) => { event.preventDefault(); navigate("/"); }}>{content.notFound.action}</a></main>
           : <main>
         <section className="hero"><div><p className="eyebrow">{t("product")}</p><h1>{t("title")}</h1><p className="hero-copy">{t("subtitle")}</p><p className="system-status"><span/> {t("connected")}</p></div><div className="hero-visual" aria-hidden="true"><span className="orbit orbit-one"/><span className="orbit orbit-two"/><strong>CEFR</strong><small>A1 · A2 · B1 · B2 · C1 · C2</small></div></section>
         <nav id="features" className="feature-navigation" aria-label={content.features.label}>
-          <section id="writing-checker" className={workspaceMode === "checker" ? "active" : undefined}><a href={featureHref("checker")} aria-current={workspaceMode === "checker" ? "page" : undefined}><h2>{content.features.checker}</h2><p>{content.features.checkerDescription}</p></a></section>
-          <section id="writing-practice" className={workspaceMode === "topic" ? "active" : undefined}><a href={featureHref("topic")} aria-current={workspaceMode === "topic" ? "page" : undefined}><h2>{content.features.practice}</h2><p>{content.features.practiceDescription}</p></a></section>
-          <section id="exam-practice" className={workspaceMode === "exam" ? "active" : undefined}><a href={featureHref("exam")} aria-current={workspaceMode === "exam" ? "page" : undefined}><h2>{content.features.exam}</h2><p>{content.features.examDescription}</p></a></section>
+          <section id="writing-checker" className={workspaceMode === "checker" ? "active" : undefined}><a href={featureHref("checker")} onClick={(event) => { event.preventDefault(); navigate(featureHref("checker")); }} aria-current={workspaceMode === "checker" ? "page" : undefined}><h2>{content.features.checker}</h2><p>{content.features.checkerDescription}</p></a></section>
+          <section id="writing-practice" className={workspaceMode === "topic" ? "active" : undefined}><a href={featureHref("topic")} onClick={(event) => { event.preventDefault(); navigate(featureHref("topic")); }} aria-current={workspaceMode === "topic" ? "page" : undefined}><h2>{content.features.practice}</h2><p>{content.features.practiceDescription}</p></a></section>
+          <section id="exam-practice" className={workspaceMode === "exam" ? "active" : undefined}><a href={featureHref("exam")} onClick={(event) => { event.preventDefault(); navigate(featureHref("exam")); }} aria-current={workspaceMode === "exam" ? "page" : undefined}><h2>{content.features.exam}</h2><p>{content.features.examDescription}</p></a></section>
         </nav>
         {workspaceMode !== "checker" && <section id="writing-workspace" className="feature-section"><PracticeStudio key={workspaceMode} locale={locale} user={user} mode={workspaceMode} maximumWords={maximumWords} onRequireAuth={requestAuthentication}/></section>}
         {workspaceMode === "checker" && <section id="writing-workspace" className="workspace feature-section" aria-labelledby="writing-heading">
@@ -146,6 +161,6 @@ export function App() {
         {workspaceMode === "checker" && result?.evaluation && <EvaluationResult result={result.evaluation} locale={locale}/>}
       </main>}
     {authDialogOpen && <AuthDialog locale={locale} onClose={() => setAuthDialogOpen(false)} onSignIn={startAuthentication}/>}
-    <SiteFooter locale={locale}/>
+    <SiteFooter locale={locale} onNavigate={navigate}/>
   </div>;
 }
