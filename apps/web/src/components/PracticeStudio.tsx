@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { api, RequestError } from "../api";
 import { getContent } from "../content-i18n";
-import { localizeApiError } from "../i18n";
+import { evaluationUnavailable, localizeApiError } from "../i18n";
 import type { Evaluation, IeltsCriteria, IeltsEvaluation, Locale, PracticeEvaluation, PracticeTask, ToeicEvaluation, User } from "../types";
 import { EvaluationResult } from "./EvaluationResult";
 
@@ -120,7 +120,8 @@ export function PracticeStudio({ locale, user, mode, maximumWords, onRequireAuth
       setEvaluation(response.evaluation.evaluation);
       setMessage(p.submitted);
     } catch (error) {
-      setMessage(error instanceof RequestError ? localizeApiError(locale, error.code, error.message) : p.submitError);
+      const serviceFailure = !(error instanceof RequestError) || !["AUTH_REQUIRED", "USER_BLOCKED", "INVALID_INPUT", "WRITING_TOO_LONG", "DUPLICATE_REQUEST"].includes(error.code);
+      setMessage(serviceFailure ? evaluationUnavailable(locale) : error instanceof RequestError ? localizeApiError(locale, error.code, error.message) : p.submitError);
     } finally {
       setSubmitting(false);
     }

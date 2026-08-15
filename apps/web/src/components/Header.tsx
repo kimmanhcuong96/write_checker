@@ -11,7 +11,8 @@ export function Header({ user, locale, onLocaleChange, onLogout, onSignIn, onNav
   return <header className="site-header">
     <a className="brand" href="/" onClick={(event) => { event.preventDefault(); onNavigate("/"); }} aria-label={copy.homeLabel}><span className="brand-mark">M2</span><span><b>me2write</b><small>{copy.brandTagline}</small></span></a>
     <nav aria-label={copy.primaryLabel}>
-      <div className="primary-links"><a className="nav-link" href="/about" onClick={(event) => { event.preventDefault(); onNavigate("/about"); }}>{copy.about}</a><a className="nav-link" href="/contact" onClick={(event) => { event.preventDefault(); onNavigate("/contact"); }}>{copy.contact}</a></div>
+      <div className="primary-links"><a className="nav-link" href="/about" onClick={(event) => { event.preventDefault(); onNavigate("/about"); }}>{copy.about}</a><a className="nav-link" href="/contact" onClick={(event) => { event.preventDefault(); onNavigate("/contact"); }}>{copy.contact}</a><a className="nav-link ecosystem-link" href="https://me2talk.com/" target="_blank" rel="noopener noreferrer">{t("speaking")}</a></div>
+      <a className="ecosystem-link ecosystem-link-mobile" href="https://me2talk.com/" target="_blank" rel="noopener noreferrer">{t("speaking")}</a>
       <LanguageSelect locale={locale} onChange={onLocaleChange}/>
       {!user && <button className="header-signin" type="button" onClick={onSignIn}>{t("signIn")}</button>}
       {user && <details className="user-menu"><summary><Avatar user={user}/><span><b>{user.displayName ?? user.email ?? t("account")}</b><small>{user.isAdmin ? t("administrator") : t("member")}</small></span><i>⌄</i></summary>

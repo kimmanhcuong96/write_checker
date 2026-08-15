@@ -8,12 +8,13 @@ import { Header } from "./components/Header";
 import { PracticeStudio } from "./components/PracticeStudio";
 import { PublicPage } from "./components/PublicPage";
 import { SiteFooter } from "./components/SiteFooter";
-import { localizeApiError, persistLocale, resolveLocale, translate } from "./i18n";
+import { evaluationUnavailable, localizeApiError, persistLocale, resolveLocale, translate } from "./i18n";
 import { applyPageMetadata, resolveSitePath, type SitePath } from "./site";
 import type { CefrLevel, EvaluationResponse, Locale, User } from "./types";
 
 const levels: CefrLevel[] = ["A1", "A2", "B1", "B2", "C1", "C2"];
 const countWords = (text: string) => text.trim() ? text.trim().split(/\s+/u).length : 0;
+const isEvaluationServiceError = (code: string) => !["AUTH_REQUIRED", "USER_BLOCKED", "INVALID_INPUT", "WRITING_TOO_LONG", "DUPLICATE_REQUEST"].includes(code);
 type WorkspaceMode = "checker" | "topic" | "exam";
 const workspaceFromLocation = (pathname: string, hash = window.location.hash): WorkspaceMode | null => {
   const normalizedPath = pathname.length > 1 ? pathname.replace(/\/+$/u, "") : pathname;
@@ -106,7 +107,7 @@ export function App() {
       setResult(response); setEvaluationRequestId(null);
     } catch (reason) {
       const normalized = reason instanceof RequestError ? reason : new RequestError("UNKNOWN_ERROR", "We couldn't check your writing. Please try again.", 500);
-      setError({ code: normalized.code, message: localizeApiError(locale, normalized.code, normalized.message), requestId: normalized.requestId });
+      setError({ code: normalized.code, message: isEvaluationServiceError(normalized.code) ? evaluationUnavailable(locale) : localizeApiError(locale, normalized.code, normalized.message), requestId: normalized.requestId });
       if (["INVALID_INPUT", "WRITING_TOO_LONG", "EVALUATION_FAILED", "DUPLICATE_REQUEST"].includes(normalized.code)) setEvaluationRequestId(null);
       if (normalized.code === "AUTH_REQUIRED") setUser(null);
       if (normalized.code === "USER_BLOCKED") setUser((current) => current ? { ...current, isBlocked: true } : current);
@@ -156,7 +157,7 @@ export function App() {
             <div className="form-footer"><p>{t("helper")}</p><button className="primary-button" type="submit" disabled={user?.isBlocked || Boolean(user && submitting) || words === 0 || words > maximumWords}>{submitting && user ? <><span className="spinner"/> {t("checking")}</> : <>{t("check")} <span>→</span></>}</button></div>
           </form>
           {submitting && <div className="analysis-status"><span className="pulse-dot"/><p>{t("checking")}</p><i/></div>}
-          {error && <div className="error-banner" role="alert"><div><strong>{error.code}</strong><p>{error.message}</p>{error.requestId && <small>{t("reference")}: {error.requestId}</small>}</div><button type="button" aria-label={t("retry")} onClick={() => { void submit(); }}>↻</button></div>}
+          {error && <div className="error-banner" role="alert"><div>{!isEvaluationServiceError(error.code) && <strong>{error.code}</strong>}<p>{error.message}</p>{error.requestId && <small>{t("reference")}: {error.requestId}</small>}</div><button type="button" aria-label={t("retry")} onClick={() => { void submit(); }}>↻</button></div>}
         </section>}
         {workspaceMode === "checker" && result?.evaluation && <EvaluationResult result={result.evaluation} locale={locale}/>}
       </main>}

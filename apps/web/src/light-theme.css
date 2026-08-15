@@ -310,6 +310,9 @@ th, td { padding: 12px; }
 .site-footer { padding-inline: max(16px, calc((100vw - 1216px) / 2)); }
 .site-header .nav-link { display: inline-flex; min-height: 44px; align-items: center; padding: 10px 14px; border-radius: 6px; }
 .site-header .nav-link:hover, .site-header .nav-link:focus-visible { background: #eef4f0; }
+.ecosystem-link { color: #137a4a !important; font-weight: 650 !important; }
+.ecosystem-link:hover, .ecosystem-link:focus-visible { background: #eaf6ee !important; }
+.ecosystem-link-mobile { display: none; }
 .site-header .user-menu summary { min-height: 48px; padding-inline: 12px; }
 
 @media (max-width: 700px) {
@@ -330,6 +333,7 @@ th, td { padding: 12px; }
   .site-header { min-height: 64px; align-items: center; gap: 12px; }
   .site-header nav { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
   .primary-links { display: none; }
+  .ecosystem-link-mobile { display: inline-flex; min-height: 44px; align-items: center; padding: 0 8px; border-radius: 6px; white-space: nowrap; }
   .language-select-trigger { height: 44px; padding-inline: 10px; }
   .site-footer { padding-block: 28px 32px; margin-top: 48px; }
   .site-footer nav { width: 100%; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px 20px; }

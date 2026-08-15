@@ -81,6 +81,14 @@ const apiErrorMessages: Record<Locale, Record<string, string>> = {
 export const localizeApiError = (locale: Locale, code: string, fallback: string): string =>
   apiErrorMessages[locale][code] ?? fallback;
 
+const evaluationUnavailableMessages: Record<Locale, string> = {
+  en: "The system is overloaded. Please try again later.",
+  vi: "Hệ thống đang quá tải. Vui lòng thử lại sau.",
+  zh: "系统当前负载过高，请稍后再试。",
+  ja: "システムが混雑しています。後でもう一度お試しください。"
+};
+export const evaluationUnavailable = (locale: Locale): string => evaluationUnavailableMessages[locale];
+
 const LANGUAGE_STORAGE_KEY = "me2write:language";
 const supportedLocale = (value: string | null | undefined): Locale | null =>
   value === "en" || value === "vi" || value === "zh" || value === "ja" ? value : null;
