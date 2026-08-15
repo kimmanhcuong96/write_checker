@@ -11,7 +11,7 @@ export function Header({ user, locale, onLocaleChange, onLogout, onSignIn }: {
   return <header className="site-header">
     <a className="brand" href="/" aria-label={copy.homeLabel}><span className="brand-mark">M2</span><span><b>me2write</b><small>{copy.brandTagline}</small></span></a>
     <nav aria-label={copy.primaryLabel}>
-      <div className="primary-links"><a className="nav-link" href="/">{copy.home}</a><a className="nav-link" href="/#features">{copy.features}</a><a className="nav-link" href="/about">{copy.about}</a><a className="nav-link" href="/contact">{copy.contact}</a></div>
+      <div className="primary-links"><a className="nav-link" href="/">{copy.home}</a><a className="nav-link" href="/">{copy.features}</a><a className="nav-link" href="/about">{copy.about}</a><a className="nav-link" href="/contact">{copy.contact}</a></div>
       <LanguageSelect locale={locale} onChange={onLocaleChange}/>
       {!user && <button className="header-signin" type="button" onClick={onSignIn}>{t("signIn")}</button>}
       {user && <details className="user-menu"><summary><Avatar user={user}/><span><b>{user.displayName ?? user.email ?? t("account")}</b><small>{user.isAdmin ? t("administrator") : t("member")}</small></span><i>⌄</i></summary>

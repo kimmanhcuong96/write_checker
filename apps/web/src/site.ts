@@ -2,7 +2,7 @@ import type { Locale } from "./types";
 import { getContent } from "./content-i18n";
 import { SITE_ORIGIN } from "./site-config";
 
-export type SitePath = "/" | "/about" | "/contact" | "/privacy" | "/admin" | "/404";
+export type SitePath = "/" | "/writing-checker" | "/writing-practice" | "/exam-practice" | "/about" | "/contact" | "/privacy" | "/admin" | "/404";
 
 export const pageMetadata: Record<SitePath, { title: string; description: string; indexable: boolean }> = {
   "/": {
@@ -10,6 +10,9 @@ export const pageMetadata: Record<SitePath, { title: string; description: string
     description: "Practice English writing with CEFR-aligned feedback, guided topics, and IELTS or TOEIC writing exam practice.",
     indexable: true
   },
+  "/writing-checker": { title: "Writing Checker — me2write", description: "Get CEFR-aligned feedback on your English writing draft.", indexable: true },
+  "/writing-practice": { title: "Writing Practice — me2write", description: "Practice English writing with guided general and IELTS-style topics.", indexable: true },
+  "/exam-practice": { title: "Exam Practice — me2write", description: "Complete IELTS and TOEIC writing practice tasks with timed sessions.", indexable: true },
   "/about": {
     title: "About me2write — English Writing Practice",
     description: "Learn how me2write helps English learners practice writing and receive structured, AI-assisted feedback.",
@@ -46,7 +49,7 @@ const localizedHomeMetadata: Record<Locale, { title: string; description: string
 
 export const resolveSitePath = (pathname: string): SitePath => {
   const normalized = pathname.length > 1 ? pathname.replace(/\/+$/u, "") : pathname;
-  if (normalized === "/" || normalized === "/about" || normalized === "/contact" || normalized === "/privacy") return normalized;
+  if (normalized === "/" || normalized === "/writing-checker" || normalized === "/writing-practice" || normalized === "/exam-practice" || normalized === "/about" || normalized === "/contact" || normalized === "/privacy") return normalized;
   if (normalized.startsWith("/admin")) return "/admin";
   return "/404";
 };

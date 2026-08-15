@@ -15,7 +15,10 @@ import type { CefrLevel, EvaluationResponse, Locale, User } from "./types";
 const levels: CefrLevel[] = ["A1", "A2", "B1", "B2", "C1", "C2"];
 const countWords = (text: string) => text.trim() ? text.trim().split(/\s+/u).length : 0;
 type WorkspaceMode = "checker" | "topic" | "exam";
-const workspaceFromHash = (): WorkspaceMode | null => window.location.hash === "#writing-checker" ? "checker" : window.location.hash === "#writing-practice" ? "topic" : window.location.hash === "#exam-practice" ? "exam" : null;
+const workspaceFromLocation = (pathname: string, hash = window.location.hash): WorkspaceMode | null => {
+  const normalizedPath = pathname.length > 1 ? pathname.replace(/\/+$/u, "") : pathname;
+  return normalizedPath === "/writing-checker" || hash === "#writing-checker" ? "checker" : normalizedPath === "/writing-practice" || hash === "#writing-practice" ? "topic" : normalizedPath === "/exam-practice" || hash === "#exam-practice" ? "exam" : null;
+};
 const AUTH_DRAFT_KEY = "me2write:pending-evaluation";
 type PendingEvaluation = { workspaceMode: WorkspaceMode; mode: "estimate" | "targeted"; targetLevel: CefrLevel; text: string };
 const readPendingEvaluation = (): PendingEvaluation | null => {
@@ -40,7 +43,7 @@ export function App() {
   const [error, setError] = useState<{ code: string; message: string; requestId: string | undefined } | null>(null);
   const [evaluationRequestId, setEvaluationRequestId] = useState<string | null>(null);
   const [maximumWords, setMaximumWords] = useState(1000);
-  const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>(() => restoredDraft?.workspaceMode ?? workspaceFromHash() ?? "checker");
+  const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>(() => workspaceFromLocation(window.location.pathname) ?? restoredDraft?.workspaceMode ?? "checker");
   const [authDialogOpen, setAuthDialogOpen] = useState(false);
   const words = useMemo(() => countWords(text), [text]);
   const t = (key: Parameters<typeof translate>[1]) => translate(locale, key);
@@ -63,9 +66,20 @@ export function App() {
     if (user && restoredDraft) window.sessionStorage.removeItem(AUTH_DRAFT_KEY);
   }, [restoredDraft, user]);
   useEffect(() => {
+    const routeWorkspace = workspaceFromLocation(sitePath);
+    if (routeWorkspace) setWorkspaceMode(routeWorkspace);
+  }, [sitePath]);
+  useEffect(() => {
     if (sitePath !== "/") return;
+    const legacyWorkspace = workspaceFromLocation(window.location.pathname);
+    if (window.location.hash && legacyWorkspace) {
+      const cleanPath = legacyWorkspace === "checker" ? "/writing-checker" : legacyWorkspace === "topic" ? "/writing-practice" : "/exam-practice";
+      window.history.replaceState(null, "", cleanPath);
+      setWorkspaceMode(legacyWorkspace);
+      return;
+    }
     const syncWorkspace = () => {
-      const nextWorkspace = workspaceFromHash();
+      const nextWorkspace = workspaceFromLocation(window.location.pathname);
       if (nextWorkspace) setWorkspaceMode(nextWorkspace);
     };
     window.addEventListener("hashchange", syncWorkspace);
@@ -99,7 +113,7 @@ export function App() {
     window.location.href = `${API_ORIGIN}/auth/google`;
   };
   const persistLocaleAndSetLocale = (next: Locale) => { persistLocale(next); setLocale(next); };
-  const featureHref = (feature: WorkspaceMode) => feature === "checker" ? "/#writing-checker" : feature === "topic" ? "/#writing-practice" : "/#exam-practice";
+  const featureHref = (feature: WorkspaceMode) => feature === "checker" ? "/writing-checker" : feature === "topic" ? "/writing-practice" : "/exam-practice";
   return <div className="app-shell">
     <Header user={user} locale={locale} onLocaleChange={persistLocaleAndSetLocale} onLogout={() => { void logout(); }} onSignIn={startAuthentication}/>
     {sitePath === "/admin"

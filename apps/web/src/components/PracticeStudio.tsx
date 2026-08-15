@@ -80,7 +80,7 @@ export function PracticeStudio({ locale, user, mode, maximumWords, onRequireAuth
       setExpired(session.status === "TIME_EXPIRED" || nextRemaining === 0);
       setExamTasks(mode === "exam" ? session.tasks : []);
       setCurrent(0);
-      setAnswers(mode === "exam" ? Array(session.tasks.length).fill("") : [""]);
+      setAnswers(mode === "exam" ? Array(session.tasks.length).fill("") : [answers[0] ?? ""]);
     } catch (error) {
       setMessage(error instanceof RequestError ? localizeApiError(locale, error.code, error.message) : p.startError);
     } finally {
@@ -139,7 +139,7 @@ export function PracticeStudio({ locale, user, mode, maximumWords, onRequireAuth
     setMessage("");
   };
 
-  const locked = !startedAt || expired || evaluation !== null;
+  const locked = (mode === "exam" && !startedAt) || expired || evaluation !== null;
   return <section className="workspace practice-studio" aria-labelledby="practice-heading">
     <div className="workspace-heading"><div><p className="eyebrow">{mode === "topic" ? p.writingPractice : p.examPractice}</p><h2 id="practice-heading">{mode === "topic" ? p.chooseTopic : p.timedExam}</h2></div>{startedAt && <strong className={expired ? "timer expired" : "timer"}>{expired ? p.timeExpired : formatTime(remaining, p.noLimit)}</strong>}</div>
     {!startedAt && mode === "topic" && <div className="practice-controls">

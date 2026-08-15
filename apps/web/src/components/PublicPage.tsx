@@ -15,7 +15,7 @@ function AboutPage({ locale }: { locale: Locale }) {
   return <main className="content-page centered-page"><article>
     <p className="eyebrow">{copy.eyebrow}</p><h1>{copy.title}</h1><p className="page-intro">{copy.intro}</p>
     {copy.sections.map((section) => <section key={section.title}><h2>{section.title}</h2><p>{section.body}</p></section>)}
-    <a className="primary-button page-action" href="/#writing-checker">{copy.action}</a>
+    <a className="primary-button page-action" href="/writing-checker">{copy.action}</a>
   </article></main>;
 }
 

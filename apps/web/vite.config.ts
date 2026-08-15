@@ -18,6 +18,9 @@ export default defineConfig({
     rollupOptions: {
       input: {
         home: "index.html",
+        writingChecker: "writing-checker.html",
+        writingPractice: "writing-practice.html",
+        examPractice: "exam-practice.html",
         about: "about.html",
         contact: "contact.html",
         privacy: "privacy.html",
